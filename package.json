@@ -1,0 +1,27 @@
+{
+  "name": "autotyper",
+  "version": "1.0.0",
+  "description": "AutoTyper software to type code automatically",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "package": "electron-packager . AutoTyper --platform=win32 --arch=x64 --out=dist --overwrite --icon=icon.ico"
+  },
+  "build": {
+    "appId": "com.example.autotyper",
+    "asar": true,
+    "files": [
+      "**/*",
+      "resources/typer.exe"
+    ],
+    "asarUnpack": [
+      "resources/typer.exe"
+    ],
+    "win": {
+      "target": "nsis"
+    }
+  },
+  "devDependencies": {
+    "electron": "^29.4.6"
+  }
+}

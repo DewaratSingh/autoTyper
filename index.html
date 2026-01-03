@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>autoTyper</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f5f5f5;
+      padding: 20px;
+    }
+
+    .navbar {
+      display: flex;
+      gap: 10px;
+      background: #007bff;
+      padding: 10px;
+      border-radius: 8px;
+      justify-content: center;
+      margin-bottom: 15px;
+    }
+
+    .navbar button , button {
+      padding: 10px 18px;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      font-size: 14px;
+    }
+
+    .navbar button:hover {
+      background: #0056b3;
+      color: white;
+    }
+
+    .code-container {
+      background: white;
+      padding: 15px;
+      border-radius: 8px;
+      max-width: 900px;
+      margin: auto;
+    }
+
+    textarea {
+      width: 100%;
+      height: 200px;
+      font-family: monospace;
+      padding: 10px;
+    }
+
+    #editor {
+      margin-top: 20px;
+    }
+
+    .line {
+      display: flex;
+    }
+
+    .line div {
+      width: 30px;
+      border: 1px solid #ccc;
+      text-align: center;
+      cursor: pointer;
+    }
+
+    .line input {
+      flex: 1;
+      border: 1px solid #ccc;
+      font-family: monospace;
+      padding: 6px;
+    }
+    #code{
+      width: 98%;
+    }
+        body {
+      font-family: Arial, sans-serif;
+      background: #f4f6f8;
+      padding: 20px;
+      line-height: 1.6;
+    }
+
+    .container {
+      max-width: 900px;
+      margin: auto;
+      background: #ffffff;
+      padding: 25px;
+      border-radius: 10px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    }
+
+    h1, h2, h3 {
+      color: #007bff;
+    }
+
+    pre {
+      background: #1e1e1e;
+      color: #d4d4d4;
+      padding: 15px;
+      border-radius: 8px;
+      overflow-x: auto;
+    }
+
+    code {
+      color: #ffd479;
+    }
+
+    .step {
+      background: #f9f9f9;
+      padding: 15px;
+      margin: 15px 0;
+      border-left: 5px solid #007bff;
+      border-radius: 5px;
+    }
+
+    .note {
+      background: #fff3cd;
+      padding: 12px;
+      border-left: 5px solid #ffc107;
+      border-radius: 5px;
+      margin: 15px 0;
+    }
+
+    .tip {
+      background: #e7f5ff;
+      padding: 12px;
+      border-left: 5px solid #0d6efd;
+      border-radius: 5px;
+      margin: 15px 0;
+    }
+  </style>
+</head>
+
+<body>
+
+<nav class="navbar">
+  <button onclick="newProject()">+ New</button>
+  <button onclick="loadProject()">Load</button>
+</nav>
+
+<div class="code-container">
+  <h3>Paste Code Here</h3>
+  <textarea id="code"></textarea>
+  <button onclick="next()">Next</button>
+</div>
+
+<div id="editor"></div>
+
+<nav class="navbar">
+  <button onclick="start()">Start</button>
+  <button onclick="stop()">Stop</button>
+  <button onclick="saveProject()">Save</button>
+</nav>
+
+
+
+<div class="container">
+
+  <h1>👩‍🏫autoTyper – How to Use</h1>
+
+  <p>
+    <strong>autoTyper</strong> is a teaching tool that helps teachers
+    <b>type code live, line-by-line</b> instead of copy-pasting.
+    This improves student understanding and engagement.
+  </p>
+
+  <hr />
+
+  <h2>🎯 Purpose of This Tool</h2>
+  <ul>
+    <li>Show how real code is written</li>
+    <li>Explain structure step by step</li>
+    <li>Control teaching speed</li>
+    <li>Avoid copy-paste learning</li>
+  </ul>
+
+  <hr />
+
+  <h2>🧪 Java Code Example</h2>
+
+  <p>This is the Java code we will teach using Letter Typer:</p>
+
+  <pre><code>
+// Main.java
+public class Main {
+    public static void main(String[] args) {
+        // Creating object using constructor
+        Person p1 = new Person("Pawan", 19);
+        p1.display();
+    }
+}
+  </code></pre>
+
+  <hr />
+
+  <h2>🛠 Step-by-Step Usage</h2>
+
+  <div class="step">
+    <h3>1️⃣ Paste Code</h3>
+    <p>
+      Paste the Java code into the <b>Paste Code Here</b> text area.
+    </p>
+  </div>
+
+  <div class="step">
+    <h3>2️⃣ Click “Next”</h3>
+    <p>
+      The code is split into lines.
+      Each line has a selectable box to control typing order.
+    </p>
+  </div>
+
+  <div class="step">
+    <h3>3️⃣ Select Teaching Order</h3>
+    <p>
+      Click the left boxes to choose which lines will be typed and in what order.
+      This allows you to explain concepts step-by-step.
+    </p>
+  </div>
+
+  <div class="step">
+    <h3>4️⃣ Save Project (.pds)</h3>
+    <p>
+      Click <b>Save</b> to store the selected lines in a <code>.pds</code> file.
+      You can reuse this file in future classes.
+    </p>
+  </div>
+
+ <div class="step">
+  <h3>5️⃣ Open Code Editor</h3>
+
+  <p>Open any editor:</p>
+
+  <ul>
+    <li>
+      <strong>VS Code</strong>
+      <br />
+      <span>Make sure your <code>settings.json</code> looks like this:</span>
+
+      <pre><code>{
+  "editor.parameterHints.enabled": false,
+  "editor.suggestOnTriggerCharacters": false,
+  "editor.wordBasedSuggestions": "off",
+  "editor.quickSuggestions": {
+    "other": false,
+    "comments": false,
+    "strings": false
+  },
+  "editor.autoClosingBrackets": "never",
+  "editor.autoClosingQuotes": "never",
+  "html.autoClosingTags": false,
+  "html.autoCreateQuotes": false
+}</code></pre>
+    </li>
+
+    <li><strong>Notepad</strong></li>
+
+    <li>
+      <strong>IntelliJ / Eclipse</strong>
+      <br />
+      <span>(Disable all auto-complete and auto-fill features)</span>
+    </li>
+  </ul>
+
+  <p>
+    Place the cursor exactly where typing should begin before starting the tool.
+  </p>
+</div>
+
+
+  <div class="step">
+    <h3>6️⃣ Start Typing</h3>
+    <p>
+      Click <b>Start</b> and press your configured hotkey
+      (example: <code>Ctrl + CapsLock</code>).
+    </p>
+    <p>
+      Each key press types exactly <b>one full line</b>.
+    </p>
+  </div>
+
+  <hr />
+
+  <h2>🎓 Teaching Benefits</h2>
+
+  <ul>
+    <li>Students see real-time typing</li>
+    <li>Indentation is clearly visible</li>
+    <li>Teacher controls explanation speed</li>
+    <li>Better understanding of Java structure</li>
+  </ul>
+
+  <div class="tip">
+    <strong>💡 Tip:</strong> Pause after each line to explain what it does.
+  </div>
+
+  <div class="note">
+    <strong>⚠ Important:</strong>
+    Do not use cursor movement (arrow keys) while typing.
+    The tool works best when typing forward only.
+  </div>
+
+  <hr />
+
+  <h2>🗣 One-Line Pitch (For Teacher)</h2>
+
+  <blockquote>
+    “This tool helps me teach Java by typing code live, one line at a time,
+    so students understand how code is written, not just copied.”
+  </blockquote>
+
+</div>
+
+<script src="renderer.js"></script>
+</body>
+</html>

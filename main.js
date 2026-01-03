@@ -1,0 +1,60 @@
+const { app, BrowserWindow, ipcMain, dialog ,Menu} = require("electron");
+const { spawn } = require("child_process");
+const fs = require("fs");
+const path = require("path");
+
+let pyProcess = null;
+
+function createWindow() {
+  const win = new BrowserWindow({
+    width: 1000,
+    height: 700,
+    webPreferences: {
+      nodeIntegration: true,
+      contextIsolation: false,
+    },
+  });
+  //Menu.setApplicationMenu(null);
+  win.loadFile("index.html");
+}
+
+ipcMain.handle("save-file", async (_, data) => {
+  console.log(data)
+  const { filePath } = await dialog.showSaveDialog({
+    filters: [{ name: "PDS File", extensions: ["pds"] }],
+  });
+  if (!filePath) return null;
+  fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
+  return filePath;
+});
+
+ipcMain.handle("load-file", async () => {
+  const { filePaths } = await dialog.showOpenDialog({
+    filters: [{ name: "PDS File", extensions: ["pds"] }],
+    properties: ["openFile"],
+  });
+  if (!filePaths.length) return null;
+  const content = JSON.parse(fs.readFileSync(filePaths[0]));
+  return { path: filePaths[0], content };
+});
+
+ipcMain.on("start-typing", (_, filePath, data) => {
+  const temp = path.join(__dirname, "code.json");
+  fs.writeFileSync(temp, JSON.stringify(data, null, 2));
+
+  pyProcess = spawn("python", [path.join(__dirname, "typer.py")], {
+    cwd: __dirname,
+  });
+
+  pyProcess.stdout.on("data", (d) => console.log(d.toString()));
+  pyProcess.stderr.on("data", (d) => console.error(d.toString()));
+});
+
+ipcMain.on("stop-typing", () => {
+  if (pyProcess) {
+    pyProcess.kill();
+    pyProcess = null;
+  }
+});
+
+app.whenReady().then(createWindow);

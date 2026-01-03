@@ -1,0 +1,86 @@
+[
+  {
+    "lineNO": 1,
+    "text": "class Student {"
+  },
+  {
+    "lineNO": 21,
+    "text": "}"
+  },
+  {
+    "lineNO": 2,
+    "text": ""
+  },
+  {
+    "lineNO": 3,
+    "text": "    String name;"
+  },
+  {
+    "lineNO": 4,
+    "text": "    int age;"
+  },
+  {
+    "lineNO": 5,
+    "text": ""
+  },
+  {
+    "lineNO": 6,
+    "text": "    // Constructor"
+  },
+  {
+    "lineNO": 7,
+    "text": "    Student(String n, int a) {"
+  },
+  {
+    "lineNO": 10,
+    "text": "    }"
+  },
+  {
+    "lineNO": 8,
+    "text": "        name = n;"
+  },
+  {
+    "lineNO": 9,
+    "text": "        age = a;"
+  },
+  {
+    "lineNO": 11,
+    "text": ""
+  },
+  {
+    "lineNO": 12,
+    "text": "    void display() {"
+  },
+  {
+    "lineNO": 15,
+    "text": "    }"
+  },
+  {
+    "lineNO": 13,
+    "text": "        System.out.println(\"Name: \" + name);"
+  },
+  {
+    "lineNO": 14,
+    "text": "        System.out.println(\"Age: \" + age);"
+  },
+  {
+    "lineNO": 16,
+    "text": ""
+  },
+  {
+    "lineNO": 17,
+    "text": "    public static void main(String[] args) {"
+  },
+  {
+    "lineNO": 20,
+    "text": "    }"
+  },
+  {
+    "lineNO": 18,
+    "text": "        Student s1 = new Student(\"Pawan\", 19);"
+  },
+  {
+    "lineNO": 19,
+    "text": "        s1.display();"
+  }
+]
