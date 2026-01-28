@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog ,Menu} = require("electron");
+const { app, BrowserWindow, ipcMain, dialog, Menu } = require("electron");
 const { spawn } = require("child_process");
 const fs = require("fs");
 const path = require("path");
@@ -9,13 +9,13 @@ function createWindow() {
   const win = new BrowserWindow({
     width: 1000,
     height: 700,
-    
+
     webPreferences: {
       nodeIntegration: true,
       contextIsolation: false,
     },
   });
-  
+
   //Menu.setApplicationMenu(null);
   win.loadFile("index.html");
 }

@@ -39,15 +39,36 @@ function loadProject() {
     if (!data) return;
     currentFile = data.path;
     select = data.content;
-    // for (let i = 0; i < select.length; i++) {
-    //   if(select[i].cp==-1){
-    //     code.push({ lineNo: select[i].lineNo ,sel:select[i].sel, text: select[i].text, edit: [] })
-    //   }else{
+    // Reconstruct code array from select data
+    let maxLine = -1;
+    select.forEach(s => {
+      if (s.lineNo > maxLine) maxLine = s.lineNo;
+    });
 
-    //   }
-    // }
+    code = [];
+    for (let i = 0; i <= maxLine; i++) {
+      code.push({ lineNo: i, sel: "→", text: "", edit: [] });
+    }
+
+    select.forEach(s => {
+      if (!code[s.lineNo]) return;
+
+      if (s.cp === -1) {
+        code[s.lineNo].text = s.text;
+        code[s.lineNo].sel = s.sel;
+      } else {
+        code[s.lineNo].edit.push({
+          sel: s.sel,
+          text: s.wholeText,
+          startPos: s.cp,
+          editedLength: s.del,
+          editedText: s.text
+        });
+      }
+    });
+
     alert("Project loaded");
-    //render()
+    render()
   });
 }
 
@@ -207,6 +228,7 @@ function render() {
 function addline(i, j, isreal, adder) {
   if (isreal) {
     inputdiv.style.display = "block";
+    input.focus();
     if (code[i].edit.length === 0) {
       input.value = code[i].text;
     } else {
@@ -214,15 +236,48 @@ function addline(i, j, isreal, adder) {
     }
     selectedline = i;
   } else {
+    // Check if ALREADY selected
+    let currentSel;
+    if (j == -1) {
+      currentSel = code[i].sel;
+    } else {
+      currentSel = code[i].edit[j].sel;
+    }
 
+    if (currentSel !== "→") {
+      // DESELECT LOGIC
+      const selVal = currentSel;
+
+      // Remove from select array
+      select = select.filter(s => s.sel !== selVal);
+
+      // Shift remaining numbers
+      select.forEach(s => {
+        if (s.sel > selVal) s.sel--;
+      });
+
+      // Sync visuals
+      syncSelectionVisuals();
+      return;
+    }
+
+    // SELECT LOGIC (Validation)
+    if (j != -1) {
+      if (code[i].sel == "→") {
+        // If parent line is not selected, strict check? 
+        // Existing logic allowed edit selection if code[i].sel is not arrow?
+        // Original: if (code[i].sel == "→") alert...
+        // If we want to allow selecting edit only if line is selected:
+        alert("This line is not Printed yet")
+        return
+      }
+    }
+
+    // ADD TO SELECTION
     if (j == -1) {
       code[i].sel = select.length + 1;
       adder.innerHTML = select.length + 1;
     } else {
-      if (code[i].sel == "→") {
-        alert("This line is not Printed yet")
-        return
-      }
       adder.innerHTML = select.length + 1;
       code[i].edit[j].sel = select.length + 1;
     }
@@ -248,6 +303,30 @@ function addline(i, j, isreal, adder) {
   }
 }
 
+function syncSelectionVisuals() {
+  // Reset all to arrow
+  code.forEach(line => {
+    line.sel = "→";
+    line.edit.forEach(e => e.sel = "→");
+  });
+
+  // Apply from select
+  select.forEach(s => {
+    if (!code[s.lineNo]) return;
+    if (s.cp === -1) {
+      code[s.lineNo].sel = s.sel;
+    } else {
+      const edit = code[s.lineNo].edit.find(e =>
+        e.startPos === s.cp &&
+        e.editedLength === s.del &&
+        e.text === s.wholeText
+      );
+      if (edit) edit.sel = s.sel;
+    }
+  });
+  render();
+}
+
 function confermedit() {
   if (insertState) {
     const newLine = {
@@ -257,8 +336,18 @@ function confermedit() {
       edit: []
     };
     if (insertState.direction === 'up') {
+      select.forEach(item => {
+        if (item.lineNo >= insertState.index) {
+          item.lineNo++;
+        }
+      });
       code.splice(insertState.index, 0, newLine);
     } else {
+      select.forEach(item => {
+        if (item.lineNo >= insertState.index + 1) {
+          item.lineNo++;
+        }
+      });
       code.splice(insertState.index + 1, 0, newLine);
     }
     normalizeLineNumbers();

@@ -1,7 +1,10 @@
 import json, time, keyboard, os, sys
 import pyautogui
 
-BASE = os.path.dirname(os.path.abspath(__file__))
+if getattr(sys, 'frozen', False):
+    BASE = os.path.dirname(sys.executable)
+else:
+    BASE = os.path.dirname(os.path.abspath(__file__))
 FILE = os.path.join(BASE, "code.json")
 
 with open(FILE, "r", encoding="utf-8") as f:
@@ -132,26 +135,26 @@ def next_char():
             if line["lineNo"] > prev:
                 print("next line")
                 print(next,len(lines)-1)
-                if next == len(lines) -1:
-                     print("last line")
-                     go_line_end()
-                     wait=True
-                     keyboard.press_and_release("enter")
-                     sync()
-                     wait=False
-                     write=True
-                else :
-                    if move < next-nextprev-1:
-                        move_down()
-                        move+=1
-                    elif move == next-nextprev-1:
-                        move=0
-                        go_line_end()
-                        wait=True
-                        keyboard.press_and_release("enter")
-                        sync()
-                        wait=False
-                        write=True
+                # if next == len(lines) -1:
+                #      print("last line")
+                #      go_line_end()
+                #      wait=True
+                #      keyboard.press_and_release("enter")
+                #      sync()
+                #      wait=False
+                #      write=True
+                # else :
+                if move < next-nextprev-1:
+                    move_down()
+                    move+=1
+                elif move == next-nextprev-1:
+                    move=0
+                    go_line_end()
+                    wait=True
+                    keyboard.press_and_release("enter")
+                    sync()
+                    wait=False
+                    write=True
 
             elif line["lineNo"] < prev:
                 go_line_start()

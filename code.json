@@ -4,146 +4,57 @@
     "sel": 1,
     "cp": -1,
     "del": -1,
-    "text": "class Student {"
-  },
-  {
-    "lineNo": 20,
-    "sel": 2,
-    "cp": -1,
-    "del": -1,
-    "text": "}"
+    "text": "1"
   },
   {
     "lineNo": 1,
-    "sel": 3,
+    "sel": 2,
     "cp": -1,
     "del": -1,
-    "text": ""
-  },
-  {
-    "lineNo": 2,
-    "sel": 4,
-    "cp": -1,
-    "del": -1,
-    "text": "    String name;"
+    "text": "2"
   },
   {
     "lineNo": 3,
-    "sel": 5,
+    "sel": 3,
     "cp": -1,
     "del": -1,
-    "text": "    int age;"
+    "text": "3"
   },
   {
     "lineNo": 4,
-    "sel": 6,
+    "sel": 4,
     "cp": -1,
     "del": -1,
-    "text": ""
+    "text": "4"
+  },
+  {
+    "lineNo": 2,
+    "sel": 5,
+    "cp": -1,
+    "del": -1,
+    "text": "5"
+  },
+  {
+    "lineNo": 2,
+    "sel": 6,
+    "cp": 1,
+    "del": 0,
+    "text": "6",
+    "wholeText": "56"
+  },
+  {
+    "lineNo": 2,
+    "sel": 7,
+    "cp": 2,
+    "del": 0,
+    "text": "7",
+    "wholeText": "567"
   },
   {
     "lineNo": 5,
-    "sel": 7,
-    "cp": -1,
-    "del": -1,
-    "text": "    // Constructor"
-  },
-  {
-    "lineNo": 6,
     "sel": 8,
     "cp": -1,
     "del": -1,
-    "text": "    Student(String n, int a) {"
-  },
-  {
-    "lineNo": 9,
-    "sel": 9,
-    "cp": -1,
-    "del": -1,
-    "text": "    }"
-  },
-  {
-    "lineNo": 7,
-    "sel": 10,
-    "cp": -1,
-    "del": -1,
-    "text": "        name = n;"
-  },
-  {
-    "lineNo": 8,
-    "sel": 11,
-    "cp": -1,
-    "del": -1,
-    "text": "        age = a;"
-  },
-  {
-    "lineNo": 10,
-    "sel": 12,
-    "cp": -1,
-    "del": -1,
-    "text": ""
-  },
-  {
-    "lineNo": 11,
-    "sel": 13,
-    "cp": -1,
-    "del": -1,
-    "text": "    void display() {"
-  },
-  {
-    "lineNo": 14,
-    "sel": 14,
-    "cp": -1,
-    "del": -1,
-    "text": "    }"
-  },
-  {
-    "lineNo": 12,
-    "sel": 15,
-    "cp": -1,
-    "del": -1,
-    "text": "        System.out.tln(\"Name: \" + name);"
-  },
-  {
-    "lineNo": 13,
-    "sel": 16,
-    "cp": -1,
-    "del": -1,
-    "text": "        System.out.println(\"Age: \" + age);"
-  },
-  {
-    "lineNo": 15,
-    "sel": 17,
-    "cp": -1,
-    "del": -1,
-    "text": ""
-  },
-  {
-    "lineNo": 16,
-    "sel": 18,
-    "cp": -1,
-    "del": -1,
-    "text": "    public static void main(String[] args) {"
-  },
-  {
-    "lineNo": 19,
-    "sel": 19,
-    "cp": -1,
-    "del": -1,
-    "text": "    }"
-  },
-  {
-    "lineNo": 17,
-    "sel": 20,
-    "cp": -1,
-    "del": -1,
-    "text": "       Student s1 = new Student(\"Pawan\", 19);"
-  },
-  {
-    "lineNo": 18,
-    "sel": 21,
-    "cp": -1,
-    "del": -1,
-    "text": "        s1.display();"
+    "text": "8"
   }
 ]
