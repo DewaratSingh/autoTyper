@@ -1,4 +1,4 @@
-import json, time, keyboard, os, sys
+import json, time, keyboard, os, sys, threading
 import pyautogui
 
 if getattr(sys, 'frozen', False):
@@ -24,6 +24,7 @@ signal=False
 move=0
 done=False
 x=0
+typing_active=False
 
 
 
@@ -244,25 +245,36 @@ def next_char():
                 
     debug_state("AFTER state change")
 
-    
-        
-
 
 def exit():
     print("exited")
     sys.exit()
 
 
-
+def typing_loop():
+    """Background thread that continuously calls next_char when typing is active"""
+    while True:
+        if typing_active:
+            next_char()
+            time.sleep(0.005)
+        else:
+            time.sleep(0.01) 
 
 def on_key_event(event):
-    if time.time() - event.time > 0.15:
-        return
-    next_char()
+    global typing_active
+    if event.event_type == 'down':
+        typing_active = True
+    elif event.event_type == 'up':
+        typing_active = False
+
+typing_thread = threading.Thread(target=typing_loop, daemon=True)
+typing_thread.start()
 
 for key_index in range(1, 13):
-    keyboard.on_press_key(f"f{key_index}", on_key_event, suppress=True)
+    keyboard.hook_key(f"f{key_index}", on_key_event, suppress=True)
 
-keyboard.add_hotkey("esc", exit, suppress=True)
+
+keyboard.on_press_key("esc", exit, suppress=True)
+
 
 keyboard.wait()

@@ -68,7 +68,16 @@ ipcMain.on("start-typing", (_, filePath, data) => {
 
 ipcMain.on("stop-typing", () => {
   if (pyProcess) {
-    pyProcess.kill();
+    if (process.platform === "win32") {
+      const { exec } = require("child_process");
+      exec(`taskkill /pid ${pyProcess.pid} /T /F`, (error) => {
+        if (error) {
+          console.error("Failed to kill process:", error);
+        }
+      });
+    } else {
+      pyProcess.kill("SIGKILL");
+    }
     pyProcess = null;
   }
 });
