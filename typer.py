@@ -23,6 +23,7 @@ wait=False
 signal=False
 move=0
 done=False
+x=0
 
 
 
@@ -41,8 +42,9 @@ def move_down():
     wait=False
 
 def go_line_start():
-    global wait 
+    global wait ,x
     wait=True
+    x=0
     pyautogui.press("home")
     time.sleep(0.03)
     wait=False
@@ -55,15 +57,25 @@ def go_line_end():
     wait=False
 
 def move_right():
-    global wait
+    global wait,x
     wait=True
+    x+=1
     pyautogui.press("right")
     time.sleep(0.03)
     wait=False
 
-def backspace():
-    global wait
+def move_left():
+    global wait,x
     wait=True
+    x-=1
+    pyautogui.press("left")
+    time.sleep(0.03)
+    wait=False
+
+def backspace():
+    global wait,x
+    wait=True
+    x-=1
     pyautogui.press("backspace")
     time.sleep(0.03)
     wait=False
@@ -80,7 +92,7 @@ def debug_state(msg):
     print(f"DEBUG: {msg}")
 
 def next_char():
-    global i, word, lines,next,write,nextprev,wait ,signal,move,done
+    global i, word, lines,next,write,nextprev,wait ,signal,move,done,x
     debug_state("BEFORE state change")
 
     if done:
@@ -99,7 +111,7 @@ def next_char():
     else:
         prev = -1
     
-    line = code[i]
+    line = code[i] 
     line_no=line["lineNo"]
 
     if line_no not in lines:
@@ -124,6 +136,7 @@ def next_char():
             if word < len(line["text"]):
                 keyboard.write(line["text"][word]) 
                 sync()
+                x+=1
                 word += 1
             else:
                 write=False
@@ -176,6 +189,7 @@ def next_char():
     else:
         if not write:
             word=0
+
             
             if nextprev > next:
                 if move < nextprev - next:
@@ -192,6 +206,20 @@ def next_char():
                     move+=1
                     return
             
+            if nextprev == next:
+                target = line["del"] + line["cp"]
+                if x < target:
+                    move_right()
+                    return
+                elif x > target:
+                    move_left()
+                    return
+                else:
+                    move=0
+                    write = True
+                    sync()
+                    return
+
             vertical_moves = abs(nextprev - next)
             if move < vertical_moves + line["del"] + line["cp"]:
                 if move == vertical_moves:

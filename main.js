@@ -41,11 +41,25 @@ ipcMain.handle("load-file", async () => {
 });
 
 ipcMain.on("start-typing", (_, filePath, data) => {
-  const temp = path.join(__dirname, "code.json");
+  const baseDir = app.isPackaged ? process.resourcesPath : __dirname;
+  const temp = path.join(baseDir, "code.json");
   fs.writeFileSync(temp, JSON.stringify(data, null, 2));
 
-  pyProcess = spawn("python", [path.join(__dirname, "typer.py")], {
-    cwd: __dirname,
+  let executable = "python";
+  let args = [path.join(__dirname, "typer.py")];
+  let cwd = __dirname;
+
+  if (app.isPackaged) {
+    const executableName = process.platform === "win32" ? "typer.exe" : "typer";
+    executable = path.join(process.resourcesPath, executableName);
+    args = [];
+    cwd = process.resourcesPath;
+  } else if (process.platform === "linux" || process.platform === "darwin") {
+    executable = "python3";
+  }
+
+  pyProcess = spawn(executable, args, {
+    cwd: cwd,
   });
 
   pyProcess.stdout.on("data", (d) => console.log(d.toString()));

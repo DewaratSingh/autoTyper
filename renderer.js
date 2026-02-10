@@ -117,6 +117,10 @@ function render() {
     leftMark.style.backgroundColor = "yellow";
     leftMark.innerHTML = code[i].sel;
     leftMark.onclick = () => addline(i, -1, false, leftMark);
+    leftMark.oncontextmenu = (e) => {
+      e.preventDefault();
+      handleRightClick(i, -1);
+    };
 
     const btnUp = document.createElement("div");
     btnUp.textContent = "+";
@@ -198,6 +202,10 @@ function render() {
       leftMark.style.left = `${xOffset}px`;
       leftMark.innerHTML = code[i].edit[editIndex].sel;
       leftMark.onclick = () => addline(i, editIndex, false, leftMark);
+      leftMark.oncontextmenu = (e) => {
+        e.preventDefault();
+        handleRightClick(i, editIndex);
+      };
       editor.appendChild(leftMark);
 
       xOffset += gutterWidth;
@@ -299,6 +307,103 @@ function addline(i, j, isreal, adder) {
         text: code[i].edit[j].editedText,
         wholeText: code[i].edit[j].text,
       });
+    }
+  }
+}
+
+function handleRightClick(lineIndex, editIndex) {
+  // If editIndex is -1, it's the line button (left mark)
+  if (editIndex === -1) {
+    const lineSel = code[lineIndex].sel;
+
+    if (lineSel === "→") {
+      // Delete the entire line
+      // Remove from select array any selections on this line
+      const removedSels = [];
+      select = select.filter(s => {
+        if (s.lineNo === lineIndex) {
+          removedSels.push(s.sel);
+          return false;
+        }
+        return true;
+      });
+
+      // Remove the line from code array
+      code.splice(lineIndex, 1);
+
+      // Update lineNo for all lines after the deleted line
+      select.forEach(s => {
+        if (s.lineNo > lineIndex) {
+          s.lineNo--;
+        }
+      });
+
+      // Renumber selections
+      if (removedSels.length > 0) {
+        const minRemoved = Math.min(...removedSels);
+        select.forEach(s => {
+          if (s.sel > minRemoved) {
+            s.sel -= removedSels.length;
+          }
+        });
+      }
+
+      normalizeLineNumbers();
+      syncSelectionVisuals();
+    } else {
+      // It's a numbered button - delete this and all subsequent
+      const selValue = lineSel;
+
+      // Remove this selection and all with higher numbers
+      select = select.filter(s => s.sel < selValue);
+
+      // Reset visuals
+      syncSelectionVisuals();
+    }
+  } else {
+    // It's an edit button
+    const editSel = code[lineIndex].edit[editIndex].sel;
+
+    if (editSel === "→") {
+      // Delete this specific edit
+      code[lineIndex].edit.splice(editIndex, 1);
+      render();
+    } else {
+      // Delete this edit and all subsequent edits on this line (by position)
+      const editsToDelete = code[lineIndex].edit.slice(editIndex);
+      const selectionsToRemove = [];
+
+      // Collect selection numbers to remove
+      editsToDelete.forEach(edit => {
+        if (edit.sel !== "→") {
+          selectionsToRemove.push(edit.sel);
+        }
+      });
+
+      // Remove the edits from the code array
+      code[lineIndex].edit.splice(editIndex, editsToDelete.length);
+
+      // Remove corresponding selections from select array
+      select = select.filter(s => !selectionsToRemove.includes(s.sel));
+
+      // Renumber remaining selections
+      if (selectionsToRemove.length > 0) {
+        const minRemoved = Math.min(...selectionsToRemove);
+        selectionsToRemove.sort((a, b) => a - b);
+
+        select.forEach(s => {
+          let decrementBy = 0;
+          selectionsToRemove.forEach(removed => {
+            if (s.sel > removed) {
+              decrementBy++;
+            }
+          });
+          s.sel -= decrementBy;
+        });
+      }
+
+      // Reset visuals
+      syncSelectionVisuals();
     }
   }
 }
