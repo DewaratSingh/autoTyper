@@ -166,6 +166,7 @@ def next_char():
                     go_line_end()
                     wait=True
                     keyboard.press_and_release("enter")
+                    x=0
                     sync()
                     wait=False
                     write=True
@@ -181,6 +182,7 @@ def next_char():
                     move=0
                 wait=True
                 keyboard.press_and_release("enter")
+                x=0
                 sync()
                 move_up()
                 wait=False
@@ -213,6 +215,7 @@ def next_char():
                     move_right()
                     return
                 elif x > target:
+                    print(x,target)
                     move_left()
                     return
                 else:
@@ -242,7 +245,7 @@ def next_char():
                 word=0
                 write=True
                 signal=True
-                
+    print(x)
     debug_state("AFTER state change")
 
 
