@@ -32,12 +32,22 @@ ipcMain.handle("save-file", async (_, data) => {
 
 ipcMain.handle("load-file", async () => {
   const { filePaths } = await dialog.showOpenDialog({
-    filters: [{ name: "PDS File", extensions: ["pds"] }],
     properties: ["openFile"],
   });
   if (!filePaths.length) return null;
-  const content = JSON.parse(fs.readFileSync(filePaths[0]));
-  return { path: filePaths[0], content };
+
+  const filePath = filePaths[0];
+  const fileExtension = path.extname(filePath).toLowerCase();
+
+  if (fileExtension === '.pds') {
+    // Load as JSON (project file)
+    const content = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
+    return { path: filePath, content };
+  } else {
+    // Load as plain text file
+    const content = fs.readFileSync(filePath, 'utf-8');
+    return { path: filePath, content };
+  }
 });
 
 ipcMain.on("start-typing", (_, filePath, data) => {
@@ -72,11 +82,20 @@ ipcMain.on("stop-typing", () => {
       const { exec } = require("child_process");
       exec(`taskkill /pid ${pyProcess.pid} /T /F`, (error) => {
         if (error) {
-          console.error("Failed to kill process:", error);
+          // Error code 128 means process not found (already terminated)
+          if (error.code === 128) {
+            console.log("Process already terminated");
+          } else {
+            console.error("Failed to kill process:", error);
+          }
         }
       });
     } else {
-      pyProcess.kill("SIGKILL");
+      try {
+        pyProcess.kill("SIGKILL");
+      } catch (error) {
+        console.log("Process already terminated");
+      }
     }
     pyProcess = null;
   }

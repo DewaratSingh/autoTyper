@@ -10,7 +10,7 @@ FILE = os.path.join(BASE, "code.json")
 with open(FILE, "r", encoding="utf-8") as f:
     code = json.load(f)
 
-print("Typing starts in 3 seconds...")
+#print("Typing starts in 3 seconds...")
 time.sleep(3)
 
 i = 0
@@ -94,7 +94,7 @@ def debug_state(msg):
 
 def next_char():
     global i, word, lines,next,write,nextprev,wait ,signal,move,done,x
-    debug_state("BEFORE state change")
+    #debug_state("BEFORE state change")
 
     if done:
         return
@@ -103,9 +103,9 @@ def next_char():
         return
 
     if i >= len(code):
-        print("All code typed!")
+        #print("All code typed!")
         done = True
-        return
+        os._exit(0)
     
     if i > 0:
         prev = code[i-1]["lineNo"]
@@ -173,7 +173,7 @@ def next_char():
 
             elif line["lineNo"] < prev:
                 go_line_start()
-                print(nextprev-next-1)
+                #print(nextprev-next-1)
                 if move < nextprev-next-1:
                     move_up()
                     move+=1
@@ -215,7 +215,7 @@ def next_char():
                     move_right()
                     return
                 elif x > target:
-                    print(x,target)
+                    #print(x,target)
                     move_left()
                     return
                 else:
@@ -238,20 +238,20 @@ def next_char():
 
         else:
             if word <line["del"]:
-                print("backspace")
+                #print("backspace")
                 backspace()
                 word+=1
             else:
                 word=0
                 write=True
                 signal=True
-    print(x)
-    debug_state("AFTER state change")
+    #print(x)
+    #debug_state("AFTER state change")
 
 
-def exit():
-    print("exited")
-    sys.exit()
+def exit(event=None):
+    #print("exited")
+    os._exit(0)
 
 
 def typing_loop():

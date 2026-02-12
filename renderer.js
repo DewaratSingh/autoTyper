@@ -37,38 +37,54 @@ function newProject() {
 function loadProject() {
   ipcRenderer.invoke("load-file").then((data) => {
     if (!data) return;
-    currentFile = data.path;
-    select = data.content;
-    // Reconstruct code array from select data
-    let maxLine = -1;
-    select.forEach(s => {
-      if (s.lineNo > maxLine) maxLine = s.lineNo;
-    });
 
-    code = [];
-    for (let i = 0; i <= maxLine; i++) {
-      code.push({ lineNo: i, sel: "→", text: "", edit: [] });
-    }
+    // Check file extension
+    const filePath = data.path;
+    const fileExtension = filePath.toLowerCase().split('.').pop();
 
-    select.forEach(s => {
-      if (!code[s.lineNo]) return;
+    if (fileExtension === 'pds') {
+      // Load as project file
+      currentFile = data.path;
+      select = data.content;
+      // Reconstruct code array from select data
+      let maxLine = -1;
+      select.forEach(s => {
+        if (s.lineNo > maxLine) maxLine = s.lineNo;
+      });
 
-      if (s.cp === -1) {
-        code[s.lineNo].text = s.text;
-        code[s.lineNo].sel = s.sel;
-      } else {
-        code[s.lineNo].edit.push({
-          sel: s.sel,
-          text: s.wholeText,
-          startPos: s.cp,
-          editedLength: s.del,
-          editedText: s.text
-        });
+      code = [];
+      for (let i = 0; i <= maxLine; i++) {
+        code.push({ lineNo: i, sel: "→", text: "", edit: [] });
       }
-    });
 
-    alert("Project loaded");
-    render()
+      select.forEach(s => {
+        if (!code[s.lineNo]) return;
+
+        if (s.cp === -1) {
+          code[s.lineNo].text = s.text;
+          code[s.lineNo].sel = s.sel;
+        } else {
+          code[s.lineNo].edit.push({
+            sel: s.sel,
+            text: s.wholeText,
+            startPos: s.cp,
+            editedLength: s.del,
+            editedText: s.text
+          });
+        }
+      });
+
+      alert("Project loaded");
+      render();
+    } else {
+      // Load as text file - put content in textarea
+      const fileContent = data.content;
+      const codeTextarea = document.getElementById('code');
+      if (codeTextarea) {
+        codeTextarea.value = fileContent;
+        alert(`File loaded successfully!`);
+      }
+    }
   });
 }
 
@@ -524,4 +540,109 @@ function start() {
 function stop() {
   ipcRenderer.send("stop-typing");
   alert("stoped");
+}
+
+// Drag-and-drop functionality
+const codeTextarea = document.getElementById('code');
+const codeContainer = document.getElementById('codeContainer');
+const fileInputHidden = document.getElementById('fileInputHidden');
+
+// Handle file input change for hidden input
+if (fileInputHidden) {
+  fileInputHidden.addEventListener('change', function (e) {
+    const file = e.target.files[0];
+    if (file) {
+      readFileContent(file);
+    }
+  });
+}
+
+// Prevent default drag behaviors
+if (codeContainer) {
+  ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+    codeContainer.addEventListener(eventName, preventDefaults, false);
+  });
+
+  function preventDefaults(e) {
+    e.preventDefault();
+    e.stopPropagation();
+  }
+
+  // Highlight drop area when file is dragged over
+  ['dragenter', 'dragover'].forEach(eventName => {
+    codeContainer.addEventListener(eventName, highlight, false);
+  });
+
+  ['dragleave', 'drop'].forEach(eventName => {
+    codeContainer.addEventListener(eventName, unhighlight, false);
+  });
+
+  function highlight(e) {
+    codeContainer.classList.add('drag-over');
+  }
+
+  function unhighlight(e) {
+    codeContainer.classList.remove('drag-over');
+  }
+
+  // Handle dropped files
+  codeContainer.addEventListener('drop', handleDrop, false);
+
+  function handleDrop(e) {
+    const dt = e.dataTransfer;
+    const files = dt.files;
+
+    if (files.length > 0) {
+      readFileContent(files[0]);
+    }
+  }
+}
+
+// Read file content and display in textarea
+function readFileContent(file) {
+  // Check if file is likely a text file
+  const textExtensions = ['.c', '.py', '.js', '.java', '.html', '.css', '.txt',
+    '.cpp', '.h', '.cs', '.php', '.rb', '.go', '.rs',
+    '.kt', '.swift', '.ts', '.jsx', '.tsx', '.json',
+    '.xml', '.md', '.sh', '.bat', '.sql', '.r', '.scala',
+    '.m', '.mm', '.v', '.vh', '.sv', '.svh'];
+
+  const fileName = file.name.toLowerCase();
+  const isTextFile = textExtensions.some(ext => fileName.endsWith(ext));
+
+  if (!isTextFile) {
+    alert('Please select a text-based file (.c, .py, .js, .java, etc.)');
+    return;
+  }
+
+  const reader = new FileReader();
+
+  reader.onload = function (e) {
+    try {
+      const text = e.target.result;
+
+      // Check if content is actually text (not binary)
+      // Simple check: if there are too many non-printable characters, it's likely binary
+      const nonPrintableCount = (text.match(/[\x00-\x08\x0E-\x1F\x7F-\xFF]/g) || []).length;
+      const nonPrintableRatio = nonPrintableCount / text.length;
+
+      if (nonPrintableRatio > 0.3) {
+        alert('This file appears to be binary. Please select a text file.');
+        return;
+      }
+
+      // Display content in textarea
+      codeTextarea.value = text;
+      alert(`File "${file.name}" loaded successfully!`);
+    } catch (error) {
+      alert('Error reading file: ' + error.message);
+    }
+  };
+
+  reader.onerror = function () {
+    alert('Error reading file. Please try again.');
+  };
+
+  // Read file as text
+  reader.readAsText(file);
 }

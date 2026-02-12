@@ -40,6 +40,27 @@
       max-width: 900px;
       margin: auto;
       background-color: #d4d4d4;
+      border: 2px dashed transparent;
+      transition: all 0.3s;
+    }
+
+    .code-container.drag-over {
+      border-color: #007bff;
+      background-color: #e7f3ff;
+    }
+
+    .code-container h3 {
+      cursor: pointer;
+      user-select: none;
+      transition: color 0.3s;
+    }
+
+    .code-container h3:hover {
+      color: #007bff;
+    }
+
+    #fileInputHidden {
+      display: none;
     }
 
     textarea {
@@ -205,8 +226,9 @@
     <button onclick="loadProject()">Load</button>
   </nav>
 
-  <div class="code-container">
-    <h3>Paste Code Here</h3>
+  <div class="code-container" id="codeContainer">
+    <h3 onclick="document.getElementById('fileInputHidden').click()">Paste your code or upload a file</h3>
+    <input type="file" id="fileInputHidden" />
     <textarea id="code"></textarea>
     <button onclick="nextt()">Next</button>
   </div>
