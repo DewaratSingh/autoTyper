@@ -1,0 +1,1 @@
+pyinstaller --noconfirm --noconsole --onefile --name "autoTyper" --icon=logo.ico --add-data "index.html;." --add-data "renderer.js;." --add-data "typer.py;." main.py
