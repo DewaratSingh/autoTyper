@@ -111,11 +111,12 @@
     <button onclick="knowMore()" data-tooltip="Learn about AutoTyper and how it works">Know More</button>
   </nav>
 
-  <!-- Floating Code Input Modal -->
+  <!-- Floating Code Input Modal (edit current page) -->
   <div id="codeModal">
     <div id="codeModalBox">
       <div id="codeModalHeader">
         <h2>Paste or Upload Code</h2>
+        <button class="cm-close" onclick="closeCodeModal()" title="Close">✕</button>
       </div>
       <div id="codeModalBody">
         <p class="cm-subtitle">Paste your source code below, or drag &amp; drop / upload a file. Click <strong>Next
@@ -131,6 +132,32 @@
         </div>
       </div>
     </div>
+  </div>
+
+  <!-- Add New Page Modal -->
+  <div id="addPageModal">
+    <div id="addPageModalBox">
+      <div id="addPageModalHeader">
+        <h2>📄 Add New Page</h2>
+        <button class="cm-close" onclick="closeAddPageModal()" title="Close">✕</button>
+      </div>
+      <div id="addPageModalBody">
+        <p class="cm-subtitle">Give this page a name, then paste or upload its code.</p>
+        <input type="text" id="newPageName" placeholder="e.g. Page 1, main.py …" />
+        <input type="file" id="addPageFileInput" style="display:none" />
+        <textarea id="addPageCode" placeholder="// Paste your code here…"></textarea>
+        <div class="cm-actions">
+          <button class="cm-upload-btn" onclick="document.getElementById('addPageFileInput').click()">📂 Upload File</button>
+          <button class="cm-next-btn" onclick="createPage()">Create Page →</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Page Context Menu (Rename / Delete) -->
+  <div id="pageContextMenu">
+    <div id="pcm-rename" onclick="renamePage()">✏️ Rename</div>
+    <div id="pcm-delete" onclick="deletePage()">🗑️ Delete</div>
   </div>
 
   <div id="backdrop"></div>
@@ -289,12 +316,8 @@
   </div>
 
   <div id="pages">
-    <div>
-      <div>page 1</div>
-      <div class="page-menu-dots">☰</div>
-    </div>
-
-    <div>+</div>
+    <!-- Tabs rendered dynamically by renderPageTabs() -->
+    <div id="addPageBtn" onclick="openAddPageModal()">+</div>
   </div>
 
   <div id="editorRow" class="your-div">

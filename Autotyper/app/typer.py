@@ -47,6 +47,35 @@ move_count = 0
 done = False
 cursor_x = 0
 waiting_for_key_release = False   # blocks next step until F8 is released after a PDF step
+current_page_idx = 0              # tracks which page is currently active in VS Code
+
+
+# ---------------- VS CODE FILE SWITCH ---------------- #
+
+def _switch_vscode_file(from_page: int, to_page: int):
+    """
+    Switch the active file in VS Code using Ctrl+Fn+Down (forward)
+    or Ctrl+Fn+Up (backward), pressing once per page step.
+    Page order in AutoTyper == file tab order in VS Code.
+    """
+    global wait, current_page_idx
+    wait = True
+    steps = abs(to_page - from_page)
+    direction = 'ctrl+fn+down' if to_page > from_page else 'ctrl+fn+up'
+    for _ in range(steps):
+        try:
+            keyboard.send(direction)
+        except Exception:
+            # Fallback: some systems don't have fn key — try without
+            alt_dir = 'ctrl+next' if to_page > from_page else 'ctrl+prior'
+            try:
+                keyboard.send(alt_dir)
+            except Exception:
+                pass
+        time.sleep(SYNC_DELAY)
+    current_page_idx = to_page
+    time.sleep(SYNC_DELAY * 2)   # let VS Code settle on the new file
+    wait = False
 
 
 # ---------------- NAVIGATION ---------------- #
@@ -186,6 +215,16 @@ def process_tick():
             signal = False
             return
 
+        # ---------------- FILE SWITCH STEP (lineNo == -3) ---------------- #
+        if line_no == -3:
+            from_page = line.get('fromPage', current_page_idx)
+            to_page   = line.get('toPage',   from_page + 1)
+            _switch_vscode_file(from_page, to_page)
+            i += 1
+            word = 0
+            signal = False
+            return
+
         # Shortcut keys
         if line_no == -1:
             keys = [k.strip().lower() for k in line["text"].split('+')]
@@ -196,6 +235,7 @@ def process_tick():
             word = 0
             signal = False
             return
+
 
         if line_no not in lines:
             lines.append(line_no)
@@ -374,6 +414,7 @@ def start_typer(data, window=None):
     done = False
     cursor_x = 0
     waiting_for_key_release = False
+    current_page_idx = 0
 
     # Start thread
     thread = threading.Thread(target=typing_loop, daemon=True)

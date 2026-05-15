@@ -6,8 +6,27 @@ let editLabelText = document.getElementById("editLabelText");
 let originalInput = document.getElementById("originalInput");
 let originalContainer = document.getElementById("originalContainer");
 
-let code = [];
-let select = [];  // unified step sequence: {type:'line',...} or {type:'page', pageNo, sel}
+// ─── MULTI-PAGE STATE ──────────────────────────────────────────────────────── //
+let pages = [];          // [{ id, name, code:[], select:[] }, ...]
+let activePageIdx = 0;   // index into pages[]
+let _pcmTargetIdx = -1;  // which page the context menu is acting on
+
+// Computed refs into the active page — keeps all edit/render functions unchanged
+function getActivePage() { return pages[activePageIdx] || null; }
+function get_code()      { const p = getActivePage(); return p ? p.code   : []; }
+function get_select()    { const p = getActivePage(); return p ? p.select : []; }
+
+// Legacy globals aliased for backward-compat (render, addline, confermedit etc.)
+// We use property accessors via Proxy-like pattern — simpler: just pass through getters
+let code   = [];   // will be kept in sync with active page
+let select = [];   // will be kept in sync with active page
+
+function _syncActivePageToGlobals() {
+  const p = getActivePage();
+  if (!p) return;
+  code   = p.code;
+  select = p.select;
+}
 const lineHeight = 20;
 const charWidth = 8;
 const gutterWidth = 20;
@@ -85,8 +104,9 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // Auto-open the code input modal on first load
-  openCodeModal();
+  // Auto-open Add Page modal on first load (no pages yet)
+  renderPageTabs();
+  openAddPageModal();
 });
 
 function openCodeModal() {
@@ -131,89 +151,95 @@ function prepareInsert(index, direction) {
 }
 
 function newProject() {
-  document.getElementById("code").value = "";
   document.getElementById("editor").innerHTML = "";
   inputdiv.style.display = "none";
   backdrop.classList.remove("active");
-  select = [];
+  pages = [];
+  activePageIdx = 0;
   currentFile = null;
-  openCodeModal();  // Re-open the floating code input
+  window.currentPDFBase64 = null;
+  _syncActivePageToGlobals();
+  renderPageTabs();
+  // Open the Add Page modal for the first page
+  openAddPageModal();
 }
 
 function loadProject() {
   window.pywebview.api.load_file().then((data) => {
     if (!data) return;
-
-    // Check file extension
     const filePath = data.path;
     const fileExtension = filePath.toLowerCase().split('.').pop();
 
     if (fileExtension === 'pds') {
-      if (Array.isArray(data.content)) {
-        // Load as legacy project file
-        currentFile = data.path;
-        select = data.content;
-        // Reconstruct code array from select data
+      currentFile = data.path;
+      const content = data.content;
+
+      if (content.version === 3) {
+        // ── v3 native multi-page format ──
+        pages = content.pages || [];
+        window.currentPDFBase64 = content.pdfBase64 || null;
+        if (window.currentPDFBase64) processPDFData(base64ToArrayBuffer(window.currentPDFBase64));
+        activePageIdx = 0;
+
+      } else if (content.version === 2) {
+        // ── v2 → migrate to single page ──
+        pages = [{
+          id: _genPageId(),
+          name: 'Page 1',
+          code: content.code || [],
+          select: content.select || []
+        }];
+        window.currentPDFBase64 = content.pdfBase64 || null;
+        if (window.currentPDFBase64) processPDFData(base64ToArrayBuffer(window.currentPDFBase64));
+        activePageIdx = 0;
+
+      } else if (Array.isArray(content)) {
+        // ── v1 legacy (raw select array) ──
+        const legacySelect = content;
         let maxLine = -1;
-        select.forEach(s => {
-          if (s.lineNo > maxLine) maxLine = s.lineNo;
-        });
-
-        code = [];
+        legacySelect.forEach(s => { if (s.lineNo > maxLine) maxLine = s.lineNo; });
+        const legacyCode = [];
         for (let i = 0; i <= maxLine; i++) {
-          code.push({ lineNo: i, sel: ">", text: "", edit: [], isButton: false });
+          legacyCode.push({ lineNo: i, sel: ">", text: "", edit: [], isButton: false });
         }
-
-        select.forEach(s => {
-          if (!code[s.lineNo]) return;
-
-          // Preserve isButton properly onto code items so they render natively.
-          code[s.lineNo].isButton = s.button || false;
-
+        legacySelect.forEach(s => {
+          if (!legacyCode[s.lineNo]) return;
+          legacyCode[s.lineNo].isButton = s.button || false;
           if (s.cp === -1) {
-            code[s.lineNo].text = s.text;
-            code[s.lineNo].sel = s.sel;
+            legacyCode[s.lineNo].text = s.text;
+            legacyCode[s.lineNo].sel = s.sel;
           } else {
-            code[s.lineNo].edit.push({
-              sel: s.sel,
-              text: s.wholeText,
-              startPos: s.cp,
-              editedLength: s.del,
-              editedText: s.text
+            legacyCode[s.lineNo].edit.push({
+              sel: s.sel, text: s.wholeText,
+              startPos: s.cp, editedLength: s.del, editedText: s.text
             });
           }
         });
-      } else if (data.content.version === 2) {
-        // Load as modern project file
-        currentFile = data.path;
-        code = data.content.code;
-        select = data.content.select;
-        if (data.content.pdfBase64) {
-          window.currentPDFBase64 = data.content.pdfBase64;
-          processPDFData(base64ToArrayBuffer(window.currentPDFBase64));
-        }
+        pages = [{ id: _genPageId(), name: 'Page 1', code: legacyCode, select: legacySelect }];
+        activePageIdx = 0;
       }
 
-      toast("Project loaded", "success");
+      _syncActivePageToGlobals();
+      renderPageTabs();
       render();
+      toast("Project loaded", "success");
+
     } else {
-      // Load as text file - put content in textarea
-      const fileContent = data.content;
-      const codeTextarea = document.getElementById('code');
-      if (codeTextarea) {
-        codeTextarea.value = fileContent;
-        toast("File loaded successfully!", "success");
-      }
+      // Plain text file → load into the Add Page modal textarea
+      document.getElementById('addPageCode').value = data.content;
+      openAddPageModal();
+      toast("File loaded — click Create Page to add it.", "info");
     }
   });
 }
 
 function saveProject() {
+  // Flush current editor state back into active page before saving
+  _flushEditorToActivePage();
   const dataToSave = {
-    version: 2,
-    code: code,
-    select: select,
-    pdfBase64: window.currentPDFBase64 || null
+    version: 3,
+    pdfBase64: window.currentPDFBase64 || null,
+    pages: pages
   };
   window.pywebview.api.save_file(dataToSave).then((path) => {
     if (path) {
@@ -223,18 +249,236 @@ function saveProject() {
   });
 }
 
+// Called when user clicks "Next →" in the main codeModal (editing the current page's code)
 function nextt() {
   const text = document.getElementById("code").value;
   const lines = text.split("\n");
-  code = [];
-
+  const newCode = [];
   for (let i = 0; i < lines.length; i++) {
-    code.push({ lineNo: i, sel: ">", text: lines[i] == "" ? " " : lines[i], edit: [], isButton: false });
+    newCode.push({ lineNo: i, sel: ">", text: lines[i] === "" ? " " : lines[i], edit: [], isButton: false });
   }
-
-  closeCodeModal();  // Dismiss the floating modal
+  // Write into active page
+  if (getActivePage()) {
+    getActivePage().code   = newCode;
+    getActivePage().select = [];
+  }
+  _syncActivePageToGlobals();
+  closeCodeModal();
   render();
 }
+
+// ─── PAGE MANAGEMENT ─────────────────────────────────────────────────────────
+
+function _genPageId() {
+  return 'page-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6);
+}
+
+function _flushEditorToActivePage() {
+  const p = getActivePage();
+  if (!p) return;
+  p.code   = code;
+  p.select = select;
+}
+
+/** Rebuild the #pages tab bar from the pages[] array. */
+function renderPageTabs() {
+  const container = document.getElementById('pages');
+  if (!container) return;
+  // Remove all tab divs (keep #addPageBtn at the end)
+  const addBtn = document.getElementById('addPageBtn');
+  container.innerHTML = '';
+
+  pages.forEach((page, idx) => {
+    const tab = document.createElement('div');
+    tab.className = 'page-tab' + (idx === activePageIdx ? ' active' : '');
+    tab.dataset.idx = idx;
+
+    const nameEl = document.createElement('div');
+    nameEl.className = 'page-tab-name';
+    nameEl.textContent = page.name;
+
+    const menuBtn = document.createElement('div');
+    menuBtn.className = 'page-menu-dots';
+    menuBtn.textContent = '☰';
+    menuBtn.onclick = (e) => { e.stopPropagation(); openPageMenu(idx, e); };
+
+    tab.appendChild(nameEl);
+    tab.appendChild(menuBtn);
+    tab.onclick = () => switchToPage(idx);
+
+    container.appendChild(tab);
+  });
+
+  // Re-add the + button
+  if (addBtn) {
+    container.appendChild(addBtn);
+  } else {
+    const btn = document.createElement('div');
+    btn.id = 'addPageBtn';
+    btn.textContent = '+';
+    btn.onclick = openAddPageModal;
+    container.appendChild(btn);
+  }
+}
+
+/** Switch the editor view to a different page. */
+function switchToPage(idx) {
+  if (idx === activePageIdx && pages.length > 0) return;
+  // Save current editor state back
+  _flushEditorToActivePage();
+  // Switch
+  activePageIdx = idx;
+  _syncActivePageToGlobals();
+  renderPageTabs();
+  render();
+  renderSequencePanel();
+}
+
+// ─── ADD PAGE MODAL ──────────────────────────────────────────────────────────
+
+function openAddPageModal() {
+  const modal = document.getElementById('addPageModal');
+  if (!modal) return;
+  // Auto-suggest name
+  const nameInput = document.getElementById('newPageName');
+  if (nameInput) nameInput.value = 'Page ' + (pages.length + 1);
+  document.getElementById('addPageCode').value = '';
+  modal.classList.add('active');
+  setTimeout(() => { if (nameInput) nameInput.focus(); }, 280);
+}
+
+function closeAddPageModal() {
+  document.getElementById('addPageModal').classList.remove('active');
+}
+
+/** Called by "Create Page →" button in #addPageModal. */
+function createPage() {
+  const nameInput = document.getElementById('newPageName');
+  const codeTA    = document.getElementById('addPageCode');
+  const name = (nameInput ? nameInput.value.trim() : '') || ('Page ' + (pages.length + 1));
+  const text = codeTA ? codeTA.value : '';
+
+  const lines = text.split('\n');
+  const newCode = lines.map((ln, i) => ({
+    lineNo: i, sel: '>', text: ln === '' ? ' ' : ln, edit: [], isButton: false
+  }));
+
+  const newPage = { id: _genPageId(), name, code: newCode, select: [] };
+  pages.push(newPage);
+  activePageIdx = pages.length - 1;
+  _syncActivePageToGlobals();
+  renderPageTabs();
+  closeAddPageModal();
+  render();
+  renderSequencePanel();
+  toast(`Page "${name}" created.`, 'success');
+}
+
+// ─── PAGE CONTEXT MENU ───────────────────────────────────────────────────────
+
+function openPageMenu(idx, event) {
+  _pcmTargetIdx = idx;
+  const menu = document.getElementById('pageContextMenu');
+  if (!menu) return;
+  menu.classList.add('open');
+  // Position near the ☰ icon
+  const x = Math.min(event.clientX, window.innerWidth  - 160);
+  const y = Math.min(event.clientY + 4, window.innerHeight - 90);
+  menu.style.left = x + 'px';
+  menu.style.top  = y + 'px';
+}
+
+function _closePageMenu() {
+  const menu = document.getElementById('pageContextMenu');
+  if (menu) menu.classList.remove('open');
+  _pcmTargetIdx = -1;
+}
+
+function renamePage() {
+  if (_pcmTargetIdx < 0 || _pcmTargetIdx >= pages.length) { _closePageMenu(); return; }
+  const page = pages[_pcmTargetIdx];
+  const newName = prompt('Rename page:', page.name);
+  if (newName !== null && newName.trim() !== '') {
+    page.name = newName.trim();
+    renderPageTabs();
+    toast(`Renamed to "${page.name}".`, 'info');
+  }
+  _closePageMenu();
+}
+
+function deletePage() {
+  if (_pcmTargetIdx < 0 || _pcmTargetIdx >= pages.length) { _closePageMenu(); return; }
+  if (pages.length === 1) {
+    toast('Cannot delete the last page.', 'warning');
+    _closePageMenu();
+    return;
+  }
+  const name = pages[_pcmTargetIdx].name;
+  pages.splice(_pcmTargetIdx, 1);
+  // Adjust activePageIdx
+  if (activePageIdx >= pages.length) activePageIdx = pages.length - 1;
+  _syncActivePageToGlobals();
+  renderPageTabs();
+  render();
+  renderSequencePanel();
+  toast(`Page "${name}" deleted.`, 'info');
+  _closePageMenu();
+}
+
+// Dismiss context menu on outside click
+document.addEventListener('click', (e) => {
+  const menu = document.getElementById('pageContextMenu');
+  if (menu && menu.classList.contains('open') && !menu.contains(e.target)) {
+    _closePageMenu();
+  }
+});
+
+// ─── FLATTEN ALL PAGES FOR TYPER ────────────────────────────────────────────
+
+/** Build the flat step array for typer.py, inserting page-switch steps between pages. */
+function flattenForTyper() {
+  const flat = [];
+  pages.forEach((page, pageIdx) => {
+    // Add this page's select steps
+    page.select.forEach(item => {
+      if (item.type === 'page') {
+        flat.push({ lineNo: -2, sel: item.sel, cp: -1, del: -1, text: '', pageNo: item.pageNo });
+      } else {
+        let textToUse = item.text;
+        if (textToUse === '' && (item.del == 0 || item.del == -1)) textToUse = ' ';
+        const isBtn = page.code[item.lineNo] && page.code[item.lineNo].isButton;
+        flat.push({
+          lineNo: isBtn ? -1 : item.lineNo,
+          sel: item.sel, cp: item.cp, del: item.del,
+          text: textToUse, pageNo: null
+        });
+      }
+    });
+    // Insert file-switch step between pages
+    if (pageIdx < pages.length - 1) {
+      flat.push({ lineNo: -3, fromPage: pageIdx, toPage: pageIdx + 1 });
+    }
+  });
+  return flat;
+}
+
+// Wire addPageFileInput upload
+document.addEventListener('DOMContentLoaded', () => {
+  const addPageFileInput = document.getElementById('addPageFileInput');
+  if (addPageFileInput) {
+    addPageFileInput.addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        document.getElementById('addPageCode').value = ev.target.result;
+        toast(`"${file.name}" loaded.`, 'success');
+      };
+      reader.readAsText(file);
+    });
+  }
+});
+
 
 function render() {
   editor.innerHTML = "";
@@ -889,39 +1133,16 @@ function toggleStartStop() {
 }
 
 function start() {
-  if (!select.length) {
+  // Flush current page state before building payload
+  _flushEditorToActivePage();
+
+  const totalSteps = pages.reduce((sum, p) => sum + p.select.length, 0);
+  if (totalSteps === 0) {
     toast("No lines selected — add lines to the sequence first.", "warning");
     return;
   }
 
-  const payload = [];
-  for (let i = 0; i < select.length; i++) {
-    const item = select[i];
-    if (item.type === 'page') {
-      payload.push({
-        lineNo: -2,   // sentinel: PDF page step
-        sel: item.sel,
-        cp: -1,
-        del: -1,
-        text: '',
-        pageNo: item.pageNo
-      });
-    } else {
-      let textToUse = item.text;
-      if (textToUse === '' && (item.del == 0 || item.del == -1)) {
-        textToUse = ' ';
-      }
-      const isBtn = code[item.lineNo] && code[item.lineNo].isButton;
-      payload.push({
-        lineNo: isBtn ? -1 : item.lineNo,
-        sel: item.sel,
-        cp: item.cp,
-        del: item.del,
-        text: textToUse,
-        pageNo: null
-      });
-    }
-  }
+  const payload = flattenForTyper();
 
   // Execute the actual start logic
   window.pywebview.api.stop_typing();
