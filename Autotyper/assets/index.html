@@ -18,19 +18,19 @@
   <div id="settingsModal">
     <div id="settingsBox">
       <div id="settingsHeader">
-        <h2>⚙️ Settings</h2>
+        <h2>Settings</h2>
         <button class="st-close" onclick="closeSettings()">✕</button>
       </div>
       <div id="settingsBody">
 
         <!-- Typing Speed -->
         <div class="st-section">
-          <div class="st-section-title">⌨️ Typing Speed</div>
+          <div class="st-section-title">Typing Speed</div>
           <div class="st-speed-btns">
-            <button onclick="applySpeedPreset('slow')" id="preset-slow">🐢 Slow</button>
-            <button onclick="applySpeedPreset('normal')" id="preset-normal" class="active">🚶 Normal</button>
-            <button onclick="applySpeedPreset('fast')" id="preset-fast">🏃 Fast</button>
-            <button onclick="applySpeedPreset('turbo')" id="preset-turbo">⚡ Turbo</button>
+            <button onclick="applySpeedPreset('slow')" id="preset-slow">Slow</button>
+            <button onclick="applySpeedPreset('normal')" id="preset-normal" class="active">Normal</button>
+            <button onclick="applySpeedPreset('fast')" id="preset-fast">Fast</button>
+            <button onclick="applySpeedPreset('turbo')" id="preset-turbo">Turbo</button>
           </div>
           <div class="st-slider-row">
             <label>Char Delay</label>
@@ -54,7 +54,7 @@
 
         <!-- Theme Accent Color -->
         <div class="st-section">
-          <div class="st-section-title">🎨 Accent Color</div>
+          <div class="st-section-title">Accent Color</div>
           <div class="st-theme-row" id="swatchRow">
             <div class="st-swatch selected" style="background:#007bff" data-color="#007bff" onclick="pickSwatch(this)"
               title="Blue"></div>
@@ -82,20 +82,20 @@
 
         <!-- Background Theme -->
         <div class="st-section">
-          <div class="st-section-title">🌅 Background</div>
+          <div class="st-section-title">Background</div>
           <div class="st-bg-row">
             <button class="st-bg-btn" id="bg-white" onclick="applyBg('#f5f5f5','bg-white')"
-              style="background:#f5f5f5;">☀️ White</button>
+              style="background:#f5f5f5;">White</button>
             <button class="st-bg-btn selected" id="bg-grey" onclick="applyBg('#d4d4d4','bg-grey')"
-              style="background:#d4d4d4;">🌥️ Grey</button>
+              style="background:#d4d4d4;">Grey</button>
             <button class="st-bg-btn" id="bg-dark" onclick="applyBg('#1e1e2e','bg-dark')"
-              style="background:#1e1e2e;color:#fff;">🌙 Dark</button>
+              style="background:#1e1e2e;color:#fff;">Dark</button>
           </div>
         </div>
 
         <div class="st-footer">
           <button class="st-cancel" onclick="closeSettings()">Cancel</button>
-          <button class="st-apply" onclick="applySettings()">✅ Apply & Save</button>
+          <button class="st-apply" onclick="applySettings()">Apply & Save</button>
         </div>
       </div>
     </div>
@@ -104,8 +104,10 @@
 
   <nav class="navbar">
     <button onclick="newProject()" data-tooltip="Clear everything and start a new project">+ New</button>
+    <button onclick="loadProject()" data-tooltip="Load a saved .pds project file">Load</button>
     <button onclick="loadPDF()" data-tooltip="Load a PDF to use as presentation slides">Load PDF</button>
-    <button id="btnStartStop" class="idle" onclick="toggleStartStop()" data-tooltip="Start/Stop typing">▶ Start</button>
+    <button id="btnStartStop" class="idle" style="display: flex;align-items: center;" onclick="toggleStartStop()"
+      data-tooltip="Start/Stop typing"><img src="start.svg" alt="" srcset="">Start</button>
     <button onclick="saveProject()" data-tooltip="Save the current project as a .pds file">Save</button>
     <button onclick="openSettings()" data-tooltip="Settings">Setting</button>
     <button onclick="knowMore()" data-tooltip="Learn about AutoTyper and how it works">Know More</button>
@@ -147,7 +149,8 @@
         <input type="file" id="addPageFileInput" style="display:none" />
         <textarea id="addPageCode" placeholder="// Paste your code here…"></textarea>
         <div class="cm-actions">
-          <button class="cm-upload-btn" onclick="document.getElementById('addPageFileInput').click()">📂 Upload File</button>
+          <button class="cm-upload-btn" onclick="document.getElementById('addPageFileInput').click()">📂 Upload
+            File</button>
           <button class="cm-next-btn" onclick="createPage()">Create Page →</button>
         </div>
       </div>
@@ -158,6 +161,29 @@
   <div id="pageContextMenu">
     <div id="pcm-rename" onclick="renamePage()">✏️ Rename</div>
     <div id="pcm-delete" onclick="deletePage()">🗑️ Delete</div>
+  </div>
+
+  <!-- Rename Page Modal -->
+  <div id="renamePageModal">
+    <div id="renamePageModalBox">
+      <div id="renamePageModalHeader">
+        <h2>✏️ Rename Page</h2>
+        <button class="cm-close" onclick="closeRenamePageModal()" title="Close">✕</button>
+      </div>
+      <div id="renamePageModalBody">
+        <p class="cm-subtitle">Enter a new name for this page.</p>
+        <input type="text" id="renamePageInput" placeholder="Page name…" />
+        <div class="cm-actions">
+          <button class="cm-upload-btn" onclick="closeRenamePageModal()">Cancel</button>
+          <button class="cm-next-btn" onclick="confirmRenamePage()">✔ Rename</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Global Editor Tooltip -->
+  <div id="globalEditorTooltip"
+    style="display: none; position: fixed; z-index: 100000; background: rgba(15, 15, 30, 0.92); color: #fff; font-size: 12px; font-family: Arial, sans-serif; font-weight: 500; white-space: pre-line; text-align: center; padding: 6px 11px; border-radius: 6px; pointer-events: none; opacity: 0; transition: opacity 0.2s ease; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4); transform: translate(-50%, -100%); margin-top: -8px;">
   </div>
 
   <div id="backdrop"></div>
@@ -192,7 +218,7 @@
   <div id="knowMoreModal">
     <div id="knowMoreBox">
       <div id="knowMoreHeader">
-        <h2>📚 AutoTyper — Project Documentation</h2>
+        <h2>AutoTyper — Project Documentation</h2>
         <button class="km-close" onclick="closeKnowMore()">✕</button>
       </div>
       <div id="knowMoreBody">
@@ -215,8 +241,8 @@
           <li><strong>Pre-written Code</strong> — students see final code only, miss the build process</li>
         </ul>
         <div class="km-insight">
-          👉 Students don’t struggle with code —<br>
-          👉 They struggle with understanding <strong>how the code is built step-by-step</strong>
+          Students don’t struggle with code —<br>
+          They struggle with understanding <strong>how the code is built step-by-step</strong>
         </div>
 
         <hr class="km-hr">
@@ -251,7 +277,7 @@
           <li>Save projects as reusable <strong>.pds</strong> files</li>
           <li>Simulates real typing (character-by-character)</li>
           <li>Automatic cursor movement and indentation</li>
-          <li>One-key control: <strong>Press F8</strong> → start typing | <strong>Release</strong> → pause</li>
+          <li>One-key control: <strong>Press F8</strong> - start typing | <strong>Release</strong> - pause</li>
         </ul>
 
         <hr class="km-hr">
@@ -262,9 +288,9 @@
           <li>Click <strong>Next</strong> to split into lines</li>
           <li>Edit or arrange lines as per teaching flow</li>
           <li>Save the project</li>
-          <li>During lecture: Hold <strong>F8</strong> → code types character by character</li>
+          <li>During lecture: Hold <strong>F8</strong> - code types character by character</li>
         </ol>
-        <div class="km-tip">👉 Simply don’t press F8 to pause — the teacher is always in full control.</div>
+        <div class="km-tip">Simply don’t press F8 to pause - the teacher is always in full control.</div>
 
         <hr class="km-hr">
 
@@ -296,8 +322,8 @@
 
         <div class="km-footer">
           AutoTyper solves a real classroom problem by bridging the gap between teaching and understanding.<br>
-          👉 Programming is not about writing code fast…<br>
-          👉 It’s about understanding <em>how</em> code is built.<br>
+          Programming is not about writing code fast…<br>
+          It’s about understanding <em>how</em> code is built.<br>
           <strong>AutoTyper makes that possible.</strong>
         </div>
         <div>
@@ -321,13 +347,47 @@
   </div>
 
   <div id="editorRow" class="your-div">
-    <div id="editor" class="your-div"></div>
+    <div id="editor" class="your-div">
+      No code selected yet. <br>
+      Click
+      <button onclick="loadProject()" style="color:var(--accent);" data-tooltip="Load a saved .pds project file">
+        Load
+      </button>
+      to open an existing lecture, or click
+      <div id="addPageBtn" style="display:inline-block; text-align: center; background-color: #1a1a2e;"
+        onclick="openAddPageModal()">+</div>
+      to create a new lecture.
+
+    </div>
+
     <div id="sequencePanel" class="your-div">
-      <div id="seqList" class="your-div"></div>
+      <div id="seqList" class="your-div">
+
+        No steps yet. Click
+
+        <div
+          style="display: inline-block; position: relative; top: 5px; left: 0px; width: 19px; height: 19px; z-index: 5;">
+          <div class="mark" style="position: absolute; top: 0px; left: 0px; z-index: 100; background-color: yellow;">
+            &gt;</div>
+        </div>
+        on code lines.
+
+      </div>
     </div>
   </div>
 
-  <div id="pdfBottomBar"></div>
+  <div id="pdfBottomBar" class="your-div">
+    <div style="padding: 12px; font-size: 12px; text-align: center;">No PDF selected yet.
+      Click
+      <button onclick="loadPDF()" style="height: 40px; display: inline-block; font-size: 12px; color: var(--accent);"
+        data-tooltip="Load a PDF to use as presentation slides">
+        Load PDF
+      </button>
+
+      to select a PDF for your presentation slides.
+    </div>
+
+  </div>
 
   <div id="pdfModal">
     <div id="pdfModalContent">
@@ -336,6 +396,7 @@
     </div>
   </div>
 
+  <script src="ui.js"></script>
   <script src="renderer.js"></script>
 </body>
 

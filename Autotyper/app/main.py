@@ -219,7 +219,7 @@ class Api:
         result = self._window.create_file_dialog(
             webview.SAVE_DIALOG,
             directory='',
-            save_filename='project.pds',
+            save_filename='Lecture.pds',
             file_types=file_types
         )
         if result:

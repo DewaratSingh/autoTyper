@@ -54,28 +54,21 @@ current_page_idx = 0              # tracks which page is currently active in VS 
 
 def _switch_vscode_file(from_page: int, to_page: int):
     """
-    Switch the active file in VS Code using Ctrl+Fn+Down (forward)
-    or Ctrl+Fn+Up (backward), pressing once per page step.
-    Page order in AutoTyper == file tab order in VS Code.
+    Switch files in VS Code using Ctrl+Alt+Right (forward) or
+    Ctrl+Alt+Left (backward), pressing once per file step.
+    Jump distance = abs(to_page - from_page).
     """
     global wait, current_page_idx
     wait = True
     steps = abs(to_page - from_page)
-    direction = 'ctrl+fn+down' if to_page > from_page else 'ctrl+fn+up'
+    direction = 'ctrl+alt+right' if to_page > from_page else 'ctrl+alt+left'
     for _ in range(steps):
-        try:
-            keyboard.send(direction)
-        except Exception:
-            # Fallback: some systems don't have fn key — try without
-            alt_dir = 'ctrl+next' if to_page > from_page else 'ctrl+prior'
-            try:
-                keyboard.send(alt_dir)
-            except Exception:
-                pass
+        keyboard.send(direction)
         time.sleep(SYNC_DELAY)
     current_page_idx = to_page
-    time.sleep(SYNC_DELAY * 2)   # let VS Code settle on the new file
+    time.sleep(SYNC_DELAY * 2)   # let VS Code settle
     wait = False
+
 
 
 # ---------------- NAVIGATION ---------------- #
@@ -165,10 +158,13 @@ def process_tick():
             print("Typing finished")
             return
 
-        # Find the real previous typed line number, skipping PDF page steps (lineNo == -2)
+        # Find the real previous typed line number.
+        # Do NOT look past a file-switch (-3) — each file has its own line context.
         prev_line_no = -1
         if i > 0:
             for k in range(i - 1, -1, -1):
+                if code[k]["lineNo"] == -3:
+                    break                   # stop at file boundary
                 if code[k]["lineNo"] not in (-2, -1):
                     prev_line_no = code[k]["lineNo"]
                     break
@@ -176,10 +172,11 @@ def process_tick():
         line = code[i]
         line_no = line["lineNo"]
 
+        print(f"[TICK] i={i} line_no={line_no} prev={prev_line_no} write_mode={write_mode} word={word} lines={lines}")
+
         # ---------------- PDF PAGE STEP (lineNo == -2) ---------------- #
         if line_no == -2:
             page_no = line.get("pageNo")
-            # Use AttachThreadInput trick so Windows actually lets us steal focus
             try:
                 import ctypes
                 user32   = ctypes.windll.user32
@@ -191,7 +188,7 @@ def process_tick():
                     my_tid  = kernel32.GetCurrentThreadId()
                     if fg_tid and fg_tid != my_tid:
                         user32.AttachThreadInput(fg_tid, my_tid, True)
-                    user32.ShowWindow(hwnd, 9)      # SW_RESTORE
+                    user32.ShowWindow(hwnd, 9)
                     user32.BringWindowToTop(hwnd)
                     user32.SetForegroundWindow(hwnd)
                     user32.SetFocus(hwnd)
@@ -199,17 +196,14 @@ def process_tick():
                         user32.AttachThreadInput(fg_tid, my_tid, False)
             except Exception as e:
                 print(f"[PDF step focus] {e}")
-            # Render the PDF page via JS
             if window_ref is not None and page_no is not None:
                 try:
                     window_ref.evaluate_js(f"showPDFPage({page_no})")
                 except Exception:
                     pass
-            # Pause typing: require user to fully RELEASE the F-key before
-            # the next step is processed (prevents key-repeat from skipping).
             write_mode = False
             typing_active = False
-            waiting_for_key_release = True   # ← key gate
+            waiting_for_key_release = True
             i += 1
             word = 0
             signal = False
@@ -219,10 +213,16 @@ def process_tick():
         if line_no == -3:
             from_page = line.get('fromPage', current_page_idx)
             to_page   = line.get('toPage',   from_page + 1)
+            print(f"[FILE SWITCH] page {from_page} → {to_page}")
             _switch_vscode_file(from_page, to_page)
             i += 1
             word = 0
             signal = False
+            lines.clear()
+            # Require explicit key re-press on the new file
+            typing_active = False
+            waiting_for_key_release = True
+            print(f"[FILE SWITCH DONE] i={i} lines cleared — press F-key to continue")
             return
 
         # Shortcut keys
@@ -236,10 +236,12 @@ def process_tick():
             signal = False
             return
 
-
         if line_no not in lines:
             lines.append(line_no)
             lines.sort()
+
+        next_line_idx     = 0
+        nextprev_line_idx = 0
 
         for j in range(len(lines)):
             if lines[j] == line_no:
@@ -247,17 +249,21 @@ def process_tick():
             if lines[j] == prev_line_no:
                 nextprev_line_idx = j
 
+        print(f"[POS] next_idx={next_line_idx} prevnext_idx={nextprev_line_idx} move_count={move_count}")
+
         # ---------------- WRITE MODE ---------------- #
 
         if line["cp"] == -1 or signal:
 
             if write_mode:
                 if word < len(line["text"]):
+                    print(f"[WRITE] char '{line['text'][word]}' word={word}/{len(line['text'])}")
                     pyautogui.write(line["text"][word], interval=0)
                     cursor_x += 1
                     word += 1
                     time.sleep(TYPING_DELAY)
                 else:
+                    print(f"[WRITE DONE] line {line_no} complete → i={i+1}")
                     write_mode = False
                     i += 1
                     word = 0
@@ -265,22 +271,33 @@ def process_tick():
 
             else:
                 if line_no > prev_line_no:
-                    vertical_dist = next_line_idx - nextprev_line_idx
-
-                    if move_count < vertical_dist - 1:
-                        move_down()
-                        move_count += 1
-                    else:
-                        move_count = 0
-                        go_line_end()
-                        pyautogui.press("enter")
-                        cursor_x = 0
+                    # Special case: very first line in this file context
+                    # cursor is already at start — no Enter needed
+                    if prev_line_no == -1:
+                        go_line_start()
                         sync()
                         write_mode = True
+                        print(f"[DIRECT WRITE] first line of file, line {line_no}")
+                    else:
+                        vertical_dist = next_line_idx - nextprev_line_idx
+                        print(f"[DOWN] line_no={line_no} prev={prev_line_no} vdist={vertical_dist} move_count={move_count}")
+
+                        if move_count < vertical_dist - 1:
+                            move_down()
+                            move_count += 1
+                        else:
+                            move_count = 0
+                            go_line_end()
+                            pyautogui.press("enter")
+                            cursor_x = 0
+                            sync()
+                            write_mode = True
+                            print(f"[ENTER+WRITE] starting write for line {line_no}")
 
                 elif line_no < prev_line_no:
                     go_line_start()
                     vertical_dist = nextprev_line_idx - next_line_idx
+                    print(f"[UP] line_no={line_no} prev={prev_line_no} vdist={vertical_dist} move_count={move_count}")
 
                     if move_count < vertical_dist - 1:
                         move_up()
@@ -294,6 +311,7 @@ def process_tick():
                     sync()
                     move_up()
                     write_mode = True
+                    print(f"[UP+ENTER+WRITE] starting write for line {line_no}")
 
         # ---------------- EDIT MODE ---------------- #
 
@@ -370,7 +388,12 @@ def typing_loop():
 
     while running:
         if typing_active:
-            process_tick()
+            try:
+                process_tick()
+            except Exception as e:
+                import traceback
+                print(f"[process_tick ERROR] {e}")
+                traceback.print_exc()
             time.sleep(LOOP_DELAY)
         else:
             time.sleep(0.05)
@@ -394,6 +417,7 @@ def on_key_event(event):
 def start_typer(data, window=None):
     global code, running, typing_active, window_ref
     global i, word, lines, move_count, done, cursor_x
+    global waiting_for_key_release, current_page_idx
 
     if running:
         print("Already running")

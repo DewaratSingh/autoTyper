@@ -7,25 +7,26 @@ let originalInput = document.getElementById("originalInput");
 let originalContainer = document.getElementById("originalContainer");
 
 // ─── MULTI-PAGE STATE ──────────────────────────────────────────────────────── //
-let pages = [];          // [{ id, name, code:[], select:[] }, ...]
-let activePageIdx = 0;   // index into pages[]
+let pages = [];          // [{ id, name, code:[] }]  — NO per-page select
+let activePageIdx = 0;   // which page is shown in the editor
 let _pcmTargetIdx = -1;  // which page the context menu is acting on
 
-// Computed refs into the active page — keeps all edit/render functions unchanged
-function getActivePage() { return pages[activePageIdx] || null; }
-function get_code()      { const p = getActivePage(); return p ? p.code   : []; }
-function get_select()    { const p = getActivePage(); return p ? p.select : []; }
+// ONE global sequence — steps from ANY page, tagged with pageIdx
+let select = [];
 
-// Legacy globals aliased for backward-compat (render, addline, confermedit etc.)
-// We use property accessors via Proxy-like pattern — simpler: just pass through getters
-let code   = [];   // will be kept in sync with active page
-let select = [];   // will be kept in sync with active page
+// code[] always points to the active page's lines
+let code = [];
+
+function getActivePage() { return pages[activePageIdx] || null; }
 
 function _syncActivePageToGlobals() {
   const p = getActivePage();
-  if (!p) return;
-  code   = p.code;
-  select = p.select;
+  code = p ? p.code : [];
+}
+
+function _flushEditorToActivePage() {
+  const p = getActivePage();
+  if (p) p.code = code;
 }
 const lineHeight = 20;
 const charWidth = 8;
@@ -37,232 +38,20 @@ let insertState = null;
 let pdfDoc = null;
 
 
-// --- TOAST NOTIFICATION SYSTEM ---
-function toast(msg, type, duration) {
-  type = type || 'info';
-  duration = duration || 3500;
-  var icons = { info: 'ℹ️', success: '✅', error: '❌', warning: '⚠️' };
-  var titles = { info: 'Info', success: 'Done', error: 'Error', warning: 'Warning' };
-  var container = document.getElementById('toastContainer');
-  if (!container) { console.warn(msg); return; }
-  var el = document.createElement('div');
-  el.className = 'toast toast-' + type;
-  el.style.setProperty('--duration', (duration / 1000) + 's');
-  el.innerHTML =
-    '<span class="toast-icon">' + icons[type] + '</span>' +
-    '<div class="toast-body">' +
-      '<div class="toast-title">' + titles[type] + '</div>' +
-      '<div class="toast-msg">' + msg + '</div>' +
-    '</div>' +
-    '<button class="toast-close" onclick="this.closest(\'.toast\').remove()">×</button>' +
-    '<div class="toast-progress"></div>';
-  container.appendChild(el);
-  requestAnimationFrame(function() { requestAnimationFrame(function() { el.classList.add('show'); }); });
-  setTimeout(function() {
-    el.classList.remove('show');
-    setTimeout(function() { if (el.parentNode) el.parentNode.removeChild(el); }, 280);
-  }, duration);
-}
 
-document.addEventListener('DOMContentLoaded', () => {
-  backdrop = document.getElementById('backdrop');
-  editLabelText = document.getElementById('editLabelText');
-  originalInput = document.getElementById('originalInput');
-  originalContainer = document.getElementById('originalContainer');
-
-  if (input) {
-    input.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') {
-        e.preventDefault();
-        confermedit();
-      } else if (e.key === 'Escape') {
-        e.preventDefault();
-        cancleinput();
-      }
-    });
-  }
-
-  // Close edit modal when clicking backdrop
-  if (backdrop) {
-    backdrop.addEventListener('click', () => {
-      cancleinput();
-    });
-  }
-
-  // Drag-and-drop onto the code modal box
-  const box = document.getElementById('codeModalBox');
-  if (box) {
-    ['dragenter', 'dragover'].forEach(ev => {
-      box.addEventListener(ev, e => { e.preventDefault(); e.stopPropagation(); box.classList.add('drag-over'); });
-    });
-    ['dragleave', 'drop'].forEach(ev => {
-      box.addEventListener(ev, e => { e.preventDefault(); e.stopPropagation(); box.classList.remove('drag-over'); });
-    });
-    box.addEventListener('drop', e => {
-      const file = e.dataTransfer.files[0];
-      if (file) readFileContent(file);
-    });
-  }
-
-  // Auto-open Add Page modal on first load (no pages yet)
-  renderPageTabs();
-  openAddPageModal();
-});
-
-function openCodeModal() {
-  document.getElementById('codeModal').classList.add('active');
-  // Focus the textarea after animation
-  setTimeout(() => {
-    const ta = document.getElementById('code');
-    if (ta) ta.focus();
-  }, 280);
-}
-
-function closeCodeModal() {
-  document.getElementById('codeModal').classList.remove('active');
-}
-
-function normalizeLineNumbers() {
-  code.forEach((line, index) => {
-    line.lineNo = index;
-  });
-}
-
-function prepareInsert(index, direction) {
-  insertState = { index, direction };
-  input.value = "";
-  originalInput.value = "";
-  if (originalContainer) {
-    originalContainer.style.display = 'none';
-  }
-  if (editLabelText) {
-    editLabelText.textContent = direction === 'up' ? 'Insert line above' : 'Insert line below';
-  }
-  let typeGroup = document.getElementById('insertTypeGroup');
-  if (typeGroup) typeGroup.style.display = 'flex';
-
-  inputdiv.style.display = "block";
-  backdrop.classList.add("active");
-  setTimeout(() => {
-    input.focus();
-    const length = input.value.length;
-    input.setSelectionRange(length, length);
-  }, 50);
-}
-
-function newProject() {
-  document.getElementById("editor").innerHTML = "";
-  inputdiv.style.display = "none";
-  backdrop.classList.remove("active");
-  pages = [];
-  activePageIdx = 0;
-  currentFile = null;
-  window.currentPDFBase64 = null;
-  _syncActivePageToGlobals();
-  renderPageTabs();
-  // Open the Add Page modal for the first page
-  openAddPageModal();
-}
-
-function loadProject() {
-  window.pywebview.api.load_file().then((data) => {
-    if (!data) return;
-    const filePath = data.path;
-    const fileExtension = filePath.toLowerCase().split('.').pop();
-
-    if (fileExtension === 'pds') {
-      currentFile = data.path;
-      const content = data.content;
-
-      if (content.version === 3) {
-        // ── v3 native multi-page format ──
-        pages = content.pages || [];
-        window.currentPDFBase64 = content.pdfBase64 || null;
-        if (window.currentPDFBase64) processPDFData(base64ToArrayBuffer(window.currentPDFBase64));
-        activePageIdx = 0;
-
-      } else if (content.version === 2) {
-        // ── v2 → migrate to single page ──
-        pages = [{
-          id: _genPageId(),
-          name: 'Page 1',
-          code: content.code || [],
-          select: content.select || []
-        }];
-        window.currentPDFBase64 = content.pdfBase64 || null;
-        if (window.currentPDFBase64) processPDFData(base64ToArrayBuffer(window.currentPDFBase64));
-        activePageIdx = 0;
-
-      } else if (Array.isArray(content)) {
-        // ── v1 legacy (raw select array) ──
-        const legacySelect = content;
-        let maxLine = -1;
-        legacySelect.forEach(s => { if (s.lineNo > maxLine) maxLine = s.lineNo; });
-        const legacyCode = [];
-        for (let i = 0; i <= maxLine; i++) {
-          legacyCode.push({ lineNo: i, sel: ">", text: "", edit: [], isButton: false });
-        }
-        legacySelect.forEach(s => {
-          if (!legacyCode[s.lineNo]) return;
-          legacyCode[s.lineNo].isButton = s.button || false;
-          if (s.cp === -1) {
-            legacyCode[s.lineNo].text = s.text;
-            legacyCode[s.lineNo].sel = s.sel;
-          } else {
-            legacyCode[s.lineNo].edit.push({
-              sel: s.sel, text: s.wholeText,
-              startPos: s.cp, editedLength: s.del, editedText: s.text
-            });
-          }
-        });
-        pages = [{ id: _genPageId(), name: 'Page 1', code: legacyCode, select: legacySelect }];
-        activePageIdx = 0;
-      }
-
-      _syncActivePageToGlobals();
-      renderPageTabs();
-      render();
-      toast("Project loaded", "success");
-
-    } else {
-      // Plain text file → load into the Add Page modal textarea
-      document.getElementById('addPageCode').value = data.content;
-      openAddPageModal();
-      toast("File loaded — click Create Page to add it.", "info");
-    }
-  });
-}
-
-function saveProject() {
-  // Flush current editor state back into active page before saving
-  _flushEditorToActivePage();
-  const dataToSave = {
-    version: 3,
-    pdfBase64: window.currentPDFBase64 || null,
-    pages: pages
-  };
-  window.pywebview.api.save_file(dataToSave).then((path) => {
-    if (path) {
-      currentFile = path;
-      toast("Saved successfully", "success");
-    }
-  });
-}
-
-// Called when user clicks "Next →" in the main codeModal (editing the current page's code)
+// Called when user clicks "Next →" in the main codeModal (edit current page code)
 function nextt() {
-  const text = document.getElementById("code").value;
-  const lines = text.split("\n");
-  const newCode = [];
-  for (let i = 0; i < lines.length; i++) {
-    newCode.push({ lineNo: i, sel: ">", text: lines[i] === "" ? " " : lines[i], edit: [], isButton: false });
-  }
-  // Write into active page
-  if (getActivePage()) {
-    getActivePage().code   = newCode;
-    getActivePage().select = [];
-  }
+  const text = document.getElementById('code').value;
+  const lines = text.split('\n');
+  const newCode = lines.map((ln, i) => ({
+    lineNo: i, sel: '>', text: ln === '' ? ' ' : ln, edit: [], isButton: false
+  }));
+  // Update code for active page only — do NOT touch global select
+  const p = getActivePage();
+  if (p) p.code = newCode;
   _syncActivePageToGlobals();
+  // Remove any existing select entries for this page (code just replaced)
+  select = select.filter(s => s.pageIdx !== activePageIdx);
   closeCodeModal();
   render();
 }
@@ -275,9 +64,7 @@ function _genPageId() {
 
 function _flushEditorToActivePage() {
   const p = getActivePage();
-  if (!p) return;
-  p.code   = code;
-  p.select = select;
+  if (p) p.code = code;  // only code, select is global
 }
 
 /** Rebuild the #pages tab bar from the pages[] array. */
@@ -340,7 +127,7 @@ function openAddPageModal() {
   const modal = document.getElementById('addPageModal');
   if (!modal) return;
   // Auto-suggest name
-  const nameInput = document.getElementById('newPageName');
+  const nameInput = document.getElementById('addPageCode');
   if (nameInput) nameInput.value = 'Page ' + (pages.length + 1);
   document.getElementById('addPageCode').value = '';
   modal.classList.add('active');
@@ -354,7 +141,7 @@ function closeAddPageModal() {
 /** Called by "Create Page →" button in #addPageModal. */
 function createPage() {
   const nameInput = document.getElementById('newPageName');
-  const codeTA    = document.getElementById('addPageCode');
+  const codeTA = document.getElementById('addPageCode');
   const name = (nameInput ? nameInput.value.trim() : '') || ('Page ' + (pages.length + 1));
   const text = codeTA ? codeTA.value : '';
 
@@ -363,7 +150,7 @@ function createPage() {
     lineNo: i, sel: '>', text: ln === '' ? ' ' : ln, edit: [], isButton: false
   }));
 
-  const newPage = { id: _genPageId(), name, code: newCode, select: [] };
+  const newPage = { id: _genPageId(), name, code: newCode }; // no per-page select
   pages.push(newPage);
   activePageIdx = pages.length - 1;
   _syncActivePageToGlobals();
@@ -382,10 +169,10 @@ function openPageMenu(idx, event) {
   if (!menu) return;
   menu.classList.add('open');
   // Position near the ☰ icon
-  const x = Math.min(event.clientX, window.innerWidth  - 160);
+  const x = Math.min(event.clientX, window.innerWidth - 160);
   const y = Math.min(event.clientY + 4, window.innerHeight - 90);
   menu.style.left = x + 'px';
-  menu.style.top  = y + 'px';
+  menu.style.top = y + 'px';
 }
 
 function _closePageMenu() {
@@ -396,14 +183,36 @@ function _closePageMenu() {
 
 function renamePage() {
   if (_pcmTargetIdx < 0 || _pcmTargetIdx >= pages.length) { _closePageMenu(); return; }
-  const page = pages[_pcmTargetIdx];
-  const newName = prompt('Rename page:', page.name);
-  if (newName !== null && newName.trim() !== '') {
-    page.name = newName.trim();
-    renderPageTabs();
-    toast(`Renamed to "${page.name}".`, 'info');
-  }
+  const targetIdx = _pcmTargetIdx;   // snapshot before _closePageMenu resets it
   _closePageMenu();
+  const page = pages[targetIdx];
+  const modal = document.getElementById('renamePageModal');
+  const inp = document.getElementById('renamePageInput');
+  if (!modal || !inp) return;
+  // Store the target index on the modal so confirmRenamePage can read it
+  modal.dataset.targetIdx = targetIdx;
+  inp.value = page.name;
+  modal.classList.add('active');
+  setTimeout(() => { inp.focus(); inp.select(); }, 200);
+}
+
+function closeRenamePageModal() {
+  const modal = document.getElementById('renamePageModal');
+  if (modal) modal.classList.remove('active');
+}
+
+function confirmRenamePage() {
+  const modal = document.getElementById('renamePageModal');
+  const inp = document.getElementById('renamePageInput');
+  if (!modal || !inp) return;
+  const idx = parseInt(modal.dataset.targetIdx, 10);
+  const newName = inp.value.trim();
+  if (!isNaN(idx) && idx >= 0 && idx < pages.length && newName !== '') {
+    pages[idx].name = newName;
+    renderPageTabs();
+    toast(`Renamed to "${newName}".`, 'info');
+  }
+  closeRenamePageModal();
 }
 
 function deletePage() {
@@ -413,71 +222,24 @@ function deletePage() {
     _closePageMenu();
     return;
   }
-  const name = pages[_pcmTargetIdx].name;
-  pages.splice(_pcmTargetIdx, 1);
-  // Adjust activePageIdx
+  const deletedIdx = _pcmTargetIdx;
+  const name = pages[deletedIdx].name;
+  pages.splice(deletedIdx, 1);
+  // Remove all sequence steps belonging to deleted page
+  select = select.filter(s => s.pageIdx !== deletedIdx);
+  // Fix pageIdx references for pages that shifted
+  select.forEach(s => { if (s.pageIdx > deletedIdx) s.pageIdx--; });
+  // Re-number
+  select.forEach((s, i) => { s.sel = i + 1; });
   if (activePageIdx >= pages.length) activePageIdx = pages.length - 1;
   _syncActivePageToGlobals();
+  syncSelectionVisuals();
   renderPageTabs();
-  render();
   renderSequencePanel();
   toast(`Page "${name}" deleted.`, 'info');
   _closePageMenu();
 }
 
-// Dismiss context menu on outside click
-document.addEventListener('click', (e) => {
-  const menu = document.getElementById('pageContextMenu');
-  if (menu && menu.classList.contains('open') && !menu.contains(e.target)) {
-    _closePageMenu();
-  }
-});
-
-// ─── FLATTEN ALL PAGES FOR TYPER ────────────────────────────────────────────
-
-/** Build the flat step array for typer.py, inserting page-switch steps between pages. */
-function flattenForTyper() {
-  const flat = [];
-  pages.forEach((page, pageIdx) => {
-    // Add this page's select steps
-    page.select.forEach(item => {
-      if (item.type === 'page') {
-        flat.push({ lineNo: -2, sel: item.sel, cp: -1, del: -1, text: '', pageNo: item.pageNo });
-      } else {
-        let textToUse = item.text;
-        if (textToUse === '' && (item.del == 0 || item.del == -1)) textToUse = ' ';
-        const isBtn = page.code[item.lineNo] && page.code[item.lineNo].isButton;
-        flat.push({
-          lineNo: isBtn ? -1 : item.lineNo,
-          sel: item.sel, cp: item.cp, del: item.del,
-          text: textToUse, pageNo: null
-        });
-      }
-    });
-    // Insert file-switch step between pages
-    if (pageIdx < pages.length - 1) {
-      flat.push({ lineNo: -3, fromPage: pageIdx, toPage: pageIdx + 1 });
-    }
-  });
-  return flat;
-}
-
-// Wire addPageFileInput upload
-document.addEventListener('DOMContentLoaded', () => {
-  const addPageFileInput = document.getElementById('addPageFileInput');
-  if (addPageFileInput) {
-    addPageFileInput.addEventListener('change', (e) => {
-      const file = e.target.files[0];
-      if (!file) return;
-      const reader = new FileReader();
-      reader.onload = (ev) => {
-        document.getElementById('addPageCode').value = ev.target.result;
-        toast(`"${file.name}" loaded.`, 'success');
-      };
-      reader.readAsText(file);
-    });
-  }
-});
 
 
 function render() {
@@ -505,10 +267,15 @@ function render() {
     leftMark.style.backgroundColor = "yellow";
     leftMark.innerHTML = code[i].sel !== ">" ? code[i].sel : ">";
     leftMark.onclick = () => addline(i, -1, false, leftMark);
+    leftMark.ondblclick = (e) => {
+      e.preventDefault();
+      handleRightClick(i, -1);
+    };
     leftMark.oncontextmenu = (e) => {
       e.preventDefault();
       handleRightClick(i, -1);
     };
+    setupHoverTooltip(leftMark, "Click to select,\n Reclick to disselect,\n Double click to delete");
 
     const btnUp = document.createElement("div");
     btnUp.textContent = "+";
@@ -521,6 +288,7 @@ function render() {
     btnUp.style.marginLeft = "15px";
     btnUp.style.marginTop = "5px";
     btnUp.style.backgroundColor = "lightgreen";
+    btnUp.style.color = "black";
     btnUp.style.display = "none";
     btnUp.style.cursor = "pointer";
     btnUp.style.justifyContent = "center";
@@ -540,6 +308,7 @@ function render() {
     btnDown.style.marginLeft = "15px";
     btnDown.style.marginTop = "-5px";
     btnDown.style.backgroundColor = "lightgreen";
+    btnDown.style.color = "black";
     btnDown.style.display = "none";
     btnDown.style.cursor = "pointer";
     btnDown.style.justifyContent = "center";
@@ -594,10 +363,15 @@ function render() {
       leftMark.style.left = `${xOffset}px`;
       leftMark.innerHTML = code[i].edit[editIndex].sel !== ">" ? code[i].edit[editIndex].sel : ">";
       leftMark.onclick = () => addline(i, editIndex, false, leftMark);
+      leftMark.ondblclick = (e) => {
+        e.preventDefault();
+        handleRightClick(i, editIndex);
+      };
       leftMark.oncontextmenu = (e) => {
         e.preventDefault();
         handleRightClick(i, editIndex);
       };
+      setupHoverTooltip(leftMark, "Click to select,\n Reclick to disselect,\n Double click to delete");
       editor.appendChild(leftMark);
 
       xOffset += gutterWidth;
@@ -619,6 +393,7 @@ function render() {
     rightMark.style.top = `${y}px`;
     rightMark.style.left = `${xOffset + 10}px`;
     rightMark.onclick = () => addline(i, 0, true);
+    setupHoverTooltip(rightMark, "Add new edit");
     editor.appendChild(rightMark);
   });
 
@@ -678,29 +453,50 @@ function addline(i, j, isreal, adder) {
     }
 
     if (currentSel !== ">") {
-      // DESELECT LOGIC
+      // DESELECT LOGIC — also cascade-remove dependent edits
       const selVal = currentSel;
 
-      // Remove from select array
-      select = select.filter(s => s.sel !== selVal);
+      // Collect sel-values to remove from the global select array
+      const toRemove = new Set();
+      toRemove.add(selVal);
+
+      if (j === -1) {
+        // Deselecting the LINE → remove every edit on this line too
+        code[i].edit.forEach(edit => {
+          if (edit.sel !== ">") toRemove.add(edit.sel);
+          edit.sel = ">";             // reset visual immediately
+        });
+        code[i].sel = ">";
+      } else {
+        // Deselecting EDIT j → remove edit j and all subsequent edits on this line
+        for (let k = j; k < code[i].edit.length; k++) {
+          if (code[i].edit[k].sel !== ">") toRemove.add(code[i].edit[k].sel);
+          code[i].edit[k].sel = ">";  // reset visual immediately
+        }
+      }
+
+      // Remove all collected entries from the global select array
+      select = select.filter(s => !toRemove.has(s.sel));
 
       // Re-number remaining
       select.forEach((s, idx) => { s.sel = idx + 1; });
 
-      // Sync visuals
+      // Sync visuals (also re-applies numbers to the code model)
       syncSelectionVisuals();
       return;
     }
 
     // SELECT LOGIC (Validation)
     if (j != -1) {
+      // 1. Parent line must be selected first
       if (code[i].sel == ">") {
-        // If parent line is not selected, strict check? 
-        // Existing logic allowed edit selection if code[i].sel is not arrow?
-        // Original: if (code[i].sel == ">") alert...
-        // If we want to allow selecting edit only if line is selected:
-        toast("This line has not been printed yet", "warning")
-        return
+        toast("This line has not been printed yet — select the line first.", "warning");
+        return;
+      }
+      // 2. All previous edits on this line must be selected in order
+      if (j > 0 && code[i].edit[j - 1].sel === ">") {
+        toast(`Select edit ${j} before selecting edit ${j + 1} — edits must be added in sequence.`, "warning");
+        return;
       }
     }
 
@@ -717,6 +513,7 @@ function addline(i, j, isreal, adder) {
     if (j == -1) {
       select.push({
         type: 'line',
+        pageIdx: activePageIdx,        // ← tag with current page
         lineNo: i,
         sel: newSel,
         cp: -1,
@@ -726,6 +523,7 @@ function addline(i, j, isreal, adder) {
     } else {
       select.push({
         type: 'line',
+        pageIdx: activePageIdx,        // ← tag with current page
         lineNo: i,
         sel: newSel,
         cp: code[i].edit[j].startPos,
@@ -856,29 +654,42 @@ function handleRightClick(lineIndex, editIndex) {
 }
 
 function syncSelectionVisuals() {
-  // Reset all to arrow
-  code.forEach(line => {
-    line.sel = ">";
-    line.edit.forEach(e => e.sel = ">");
+  console.log('[SYNC] select=', JSON.stringify(select));
+  console.log('[SYNC] pages count=', pages.length, pages.map(p => p.name + ':' + p.code.length + 'lines'));
+
+  // Reset markers on ALL pages
+  pages.forEach(p => {
+    p.code.forEach(line => {
+      line.sel = '>';
+      line.edit.forEach(e => e.sel = '>');
+    });
   });
 
-  // Apply from select (only line-type items)
+  // Apply from global select to each item's correct page
   select.forEach(s => {
     if (s.type !== 'line') return;
-    if (!code[s.lineNo]) return;
+    const pg = pages[s.pageIdx];
+    if (!pg) { console.warn('[SYNC] no page for pageIdx=', s.pageIdx); return; }
+    const pgCode = pg.code;
+    if (!pgCode[s.lineNo]) { console.warn('[SYNC] no code line for lineNo=', s.lineNo, 'in page', s.pageIdx, 'len=', pgCode.length); return; }
     if (s.cp === -1) {
-      code[s.lineNo].sel = s.sel;
+      pgCode[s.lineNo].sel = s.sel;
+      console.log('[SYNC] set page', s.pageIdx, 'line', s.lineNo, 'sel=', s.sel);
     } else {
-      const edit = code[s.lineNo].edit.find(e =>
+      const edit = pgCode[s.lineNo].edit.find(e =>
         e.startPos === s.cp &&
         e.editedLength === s.del &&
         e.text === s.wholeText
       );
-      if (edit) edit.sel = s.sel;
+      if (edit) { edit.sel = s.sel; console.log('[SYNC] set edit sel=', s.sel); }
+      else { console.warn('[SYNC] edit not found for', s); }
     }
   });
+
+  _syncActivePageToGlobals();
   render();
 }
+
 
 function renderSequencePanel() {
   const list = document.getElementById('seqList');
@@ -888,10 +699,15 @@ function renderSequencePanel() {
   if (select.length === 0) {
     const empty = document.createElement('div');
     empty.style.padding = '12px';
-    empty.style.color = '#888';
-    empty.style.fontStyle = 'italic';
     empty.style.fontSize = '12px';
-    empty.textContent = "No steps yet. Click '>' on lines or page thumbnails.";
+    empty.innerHTML = ` No steps yet. Click
+        <div
+          style="display: inline-block; position: relative; top: 5px; left: 0px; width: 19px; height: 19px; z-index: 5;">
+          <div class="mark" style="position: absolute; top: 0px; left: 0px; z-index: 100; background-color: yellow;">
+            &gt;</div>
+        </div>
+        on code lines.`;
+
     list.appendChild(empty);
     return;
   }
@@ -904,10 +720,21 @@ function renderSequencePanel() {
     num.className = 'seq-num';
     num.textContent = item.sel;
 
+    // Page badge — shows which file this step belongs to
+    const pageBadge = document.createElement('div');
+    pageBadge.className = 'seq-page-badge';
+    if (item.type === 'page') {
+      pageBadge.textContent = '\uD83D\uDDBC\uFE0F';
+    } else {
+      const pg = pages[item.pageIdx];
+      pageBadge.textContent = pg ? pg.name : `P${(item.pageIdx || 0) + 1}`;
+      pageBadge.title = pg ? pg.name : '';
+    }
+
     const label = document.createElement('div');
     label.className = 'seq-label';
     if (item.type === 'page') {
-      label.textContent = `\uD83D\uDDBC\uFE0F  Page ${item.pageNo}`;
+      label.textContent = `Page ${item.pageNo}`;
     } else {
       const txt = item.text || '';
       label.textContent = txt.length > 22 ? txt.slice(0, 22) + '\u2026' : txt;
@@ -924,6 +751,7 @@ function renderSequencePanel() {
     };
 
     row.appendChild(num);
+    row.appendChild(pageBadge);
     row.appendChild(label);
     row.appendChild(del);
     list.appendChild(row);
@@ -1086,7 +914,7 @@ function setRunningState() {
   const btn = document.getElementById('btnStartStop');
   if (!btn) return;
   btn.className = 'running';
-  btn.textContent = '⏹ Stop';
+  btn.textContent = 'Stop';
 }
 
 function setIdleState() {
@@ -1113,7 +941,7 @@ function _startPolling() {
       if (window.pywebview && window.pywebview.api && window.pywebview.api.is_running) {
         window.pywebview.api.is_running().then(running => {
           if (!running) setIdleState();
-        }).catch(() => {});
+        }).catch(() => { });
       }
     } catch (e) { /* pywebview not ready */ }
   }, 1000);
@@ -1136,10 +964,11 @@ function start() {
   // Flush current page state before building payload
   _flushEditorToActivePage();
 
-  const totalSteps = pages.reduce((sum, p) => sum + p.select.length, 0);
-  if (totalSteps === 0) {
+  // select is now ONE global array — check it directly
+  if (select.length === 0) {
     toast("No lines selected — add lines to the sequence first.", "warning");
     return;
+
   }
 
   const payload = flattenForTyper();
@@ -1288,16 +1117,16 @@ function toast(msg, type, duration) {
   el.innerHTML =
     '<span class="toast-icon">' + icons[type] + '</span>' +
     '<div class="toast-body">' +
-      '<div class="toast-title">' + titles[type] + '</div>' +
-      '<div class="toast-msg">' + msg + '</div>' +
+    '<div class="toast-title">' + titles[type] + '</div>' +
+    '<div class="toast-msg">' + msg + '</div>' +
     '</div>' +
     '<button class="toast-close" onclick="this.closest(\'.toast\').remove()">×</button>' +
     '<div class="toast-progress"></div>';
   container.appendChild(el);
-  requestAnimationFrame(function() { requestAnimationFrame(function() { el.classList.add('show'); }); });
-  setTimeout(function() {
+  requestAnimationFrame(function () { requestAnimationFrame(function () { el.classList.add('show'); }); });
+  setTimeout(function () {
     el.classList.remove('show');
-    setTimeout(function() { if (el.parentNode) el.parentNode.removeChild(el); }, 280);
+    setTimeout(function () { if (el.parentNode) el.parentNode.removeChild(el); }, 280);
   }, duration);
 }
 
@@ -1478,17 +1307,15 @@ function showPDFPage(pageNum) {
       const b64 = dataUrl.split(',')[1];
 
       // Ask Python to open a REAL fullscreen native window
-      try {
-        window.pywebview.api.show_image_fullscreen(b64);
-      } catch (e) {
-        // Fallback: show in the in-app modal
-        const canvas = document.getElementById('pdfModalCanvas');
-        const context = canvas.getContext('2d');
-        canvas.width = viewport.width;
-        canvas.height = viewport.height;
-        context.drawImage(offCanvas, 0, 0);
-        document.getElementById('pdfModal').classList.add('active');
-      }
+
+      // Fallback: show in the in-app modal
+      const canvas = document.getElementById('pdfModalCanvas');
+      const context = canvas.getContext('2d');
+      canvas.width = viewport.width;
+      canvas.height = viewport.height;
+      context.drawImage(offCanvas, 0, 0);
+      document.getElementById('pdfModal').classList.add('active');
+
     });
   });
 }
@@ -1526,28 +1353,28 @@ function toast(msg, type, duration) {
   el.innerHTML =
     '<span class="toast-icon">' + icons[type] + '</span>' +
     '<div class="toast-body">' +
-      '<div class="toast-title">' + titles[type] + '</div>' +
-      '<div class="toast-msg">' + msg + '</div>' +
+    '<div class="toast-title">' + titles[type] + '</div>' +
+    '<div class="toast-msg">' + msg + '</div>' +
     '</div>' +
     '<button class="toast-close" onclick="this.closest(\'.toast\').remove()">×</button>' +
     '<div class="toast-progress"></div>';
   container.appendChild(el);
-  requestAnimationFrame(function() { requestAnimationFrame(function() { el.classList.add('show'); }); });
-  setTimeout(function() {
+  requestAnimationFrame(function () { requestAnimationFrame(function () { el.classList.add('show'); }); });
+  setTimeout(function () {
     el.classList.remove('show');
-    setTimeout(function() { if (el.parentNode) el.parentNode.removeChild(el); }, 280);
+    setTimeout(function () { if (el.parentNode) el.parentNode.removeChild(el); }, 280);
   }, duration);
 }
 
-document.addEventListener('DOMContentLoaded', function() { var m = document.getElementById('knowMoreModal'); if (m) m.addEventListener('click', function(e) { if (e.target === m) closeKnowMore(); }); });
+document.addEventListener('DOMContentLoaded', function () { var m = document.getElementById('knowMoreModal'); if (m) m.addEventListener('click', function (e) { if (e.target === m) closeKnowMore(); }); });
 
 // ─── SETTINGS PANEL ──────────────────────────────────────────────────────── //
 
 const SPEED_PRESETS = {
-  slow:   { typing: 0.15, loop: 0.20, sync: 0.10 },
+  slow: { typing: 0.15, loop: 0.20, sync: 0.10 },
   normal: { typing: 0.08, loop: 0.10, sync: 0.05 },
-  fast:   { typing: 0.03, loop: 0.05, sync: 0.02 },
-  turbo:  { typing: 0.01, loop: 0.02, sync: 0.01 },
+  fast: { typing: 0.03, loop: 0.05, sync: 0.02 },
+  turbo: { typing: 0.01, loop: 0.02, sync: 0.01 },
 };
 
 function openSettings() {
@@ -1561,13 +1388,13 @@ function openSettings() {
       const lSlider = document.getElementById('slLoop');
       const sSlider = document.getElementById('slSync');
       tSlider.value = Math.round(d.typing * 100);
-      lSlider.value = Math.round(d.loop   * 100);
-      sSlider.value = Math.round(d.sync   * 100);
+      lSlider.value = Math.round(d.loop * 100);
+      sSlider.value = Math.round(d.sync * 100);
       document.getElementById('valTyping').textContent = Math.round(d.typing * 1000) + 'ms';
-      document.getElementById('valLoop').textContent   = Math.round(d.loop   * 1000) + 'ms';
-      document.getElementById('valSync').textContent   = Math.round(d.sync   * 1000) + 'ms';
-    }).catch(() => {});
-  } catch(e) {}
+      document.getElementById('valLoop').textContent = Math.round(d.loop * 1000) + 'ms';
+      document.getElementById('valSync').textContent = Math.round(d.sync * 1000) + 'ms';
+    }).catch(() => { });
+  } catch (e) { }
 }
 
 function closeSettings() {
@@ -1579,13 +1406,13 @@ function applySpeedPreset(preset) {
   if (!p) return;
   // Update sliders
   document.getElementById('slTyping').value = Math.round(p.typing * 100);
-  document.getElementById('slLoop').value   = Math.round(p.loop   * 100);
-  document.getElementById('slSync').value   = Math.round(p.sync   * 100);
+  document.getElementById('slLoop').value = Math.round(p.loop * 100);
+  document.getElementById('slSync').value = Math.round(p.sync * 100);
   document.getElementById('valTyping').textContent = Math.round(p.typing * 1000) + 'ms';
-  document.getElementById('valLoop').textContent   = Math.round(p.loop   * 1000) + 'ms';
-  document.getElementById('valSync').textContent   = Math.round(p.sync   * 1000) + 'ms';
+  document.getElementById('valLoop').textContent = Math.round(p.loop * 1000) + 'ms';
+  document.getElementById('valSync').textContent = Math.round(p.sync * 1000) + 'ms';
   // Highlight active preset button
-  ['slow','normal','fast','turbo'].forEach(id => {
+  ['slow', 'normal', 'fast', 'turbo'].forEach(id => {
     document.getElementById('preset-' + id).classList.toggle('active', id === preset);
   });
 }
@@ -1627,25 +1454,25 @@ function applyBg(color, btnId) {
 }
 
 function shadeColor(hex, percent) {
-  let r = parseInt(hex.slice(1,3),16);
-  let g = parseInt(hex.slice(3,5),16);
-  let b = parseInt(hex.slice(5,7),16);
+  let r = parseInt(hex.slice(1, 3), 16);
+  let g = parseInt(hex.slice(3, 5), 16);
+  let b = parseInt(hex.slice(5, 7), 16);
   r = Math.min(255, Math.max(0, r + Math.round(r * percent / 100)));
   g = Math.min(255, Math.max(0, g + Math.round(g * percent / 100)));
   b = Math.min(255, Math.max(0, b + Math.round(b * percent / 100)));
-  return '#' + [r,g,b].map(x => x.toString(16).padStart(2,'0')).join('');
+  return '#' + [r, g, b].map(x => x.toString(16).padStart(2, '0')).join('');
 }
 
 function applySettings() {
   const typing = parseInt(document.getElementById('slTyping').value) / 100;
-  const loop   = parseInt(document.getElementById('slLoop').value)   / 100;
-  const sync   = parseInt(document.getElementById('slSync').value)   / 100;
+  const loop = parseInt(document.getElementById('slLoop').value) / 100;
+  const sync = parseInt(document.getElementById('slSync').value) / 100;
   try {
     window.pywebview.api.update_settings(typing, loop, sync).then(() => {
       toast('Settings saved! Speed updated.', 'success');
       closeSettings();
     }).catch(e => toast('Error saving settings: ' + e, 'error'));
-  } catch(e) {
+  } catch (e) {
     // pywebview not available (dev mode)
     toast('Settings applied (UI only).', 'info');
     closeSettings();
@@ -1653,9 +1480,9 @@ function applySettings() {
 }
 
 // Close settings on backdrop click
-(function() {
-  document.addEventListener('DOMContentLoaded', function() {
+(function () {
+  document.addEventListener('DOMContentLoaded', function () {
     var m = document.getElementById('settingsModal');
-    if (m) m.addEventListener('click', function(e) { if (e.target === m) closeSettings(); });
+    if (m) m.addEventListener('click', function (e) { if (e.target === m) closeSettings(); });
   });
 })();
