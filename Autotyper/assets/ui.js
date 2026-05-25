@@ -281,37 +281,58 @@ document.addEventListener('click', (e) => {
  * using Ctrl+Alt+Right or Ctrl+Alt+Left the needed number of times.
  */
 function flattenForTyper() {
-    const flat = [];
-    let currentFileIdx = 0;  // tracks which file VS Code currently has open
+    const payload = { series: [] };
+
+    // Initialize an array for each page
+    for (let i = 0; i < pages.length; i++) {
+        payload[i.toString()] = [];
+    }
+
+    let currentFile = null;
+    let currentSeriesGroup = null;
 
     select.forEach(item => {
         if (item.type === 'page') {
-            // PDF slide step — no file switch
-            flat.push({ lineNo: -2, sel: item.sel, cp: -1, del: -1, text: '', pageNo: item.pageNo });
+            payload.series.push({ pdfPage: item.pageNo });
+            currentFile = null;
+            currentSeriesGroup = null;
             return;
         }
 
         const targetPageIdx = item.pageIdx || 0;
+        const pageKey = targetPageIdx.toString();
 
-        // Insert file-switch step only when the target file differs from current
-        if (targetPageIdx !== currentFileIdx) {
-            flat.push({ lineNo: -3, fromPage: currentFileIdx, toPage: targetPageIdx });
-            currentFileIdx = targetPageIdx;
+        if (!payload[pageKey]) {
+            payload[pageKey] = [];
         }
 
-        // The typing step itself
         let textToUse = item.text;
         if (textToUse === '' && (item.del == 0 || item.del == -1)) textToUse = ' ';
         const pg = pages[targetPageIdx];
         const isBtn = pg && pg.code[item.lineNo] && pg.code[item.lineNo].isButton;
-        flat.push({
+
+        const stepObj = {
             lineNo: isBtn ? -1 : item.lineNo,
-            sel: item.sel, cp: item.cp, del: item.del,
-            text: textToUse, pageNo: null
-        });
+            sel: payload[pageKey].length + 1,
+            cp: item.cp,
+            del: item.del,
+            text: textToUse
+        };
+
+        const stepIndex = payload[pageKey].length;
+        payload[pageKey].push(stepObj);
+
+        // Create a new series group if we changed files or if the previous step was a PDF
+        if (currentFile !== targetPageIdx || !currentSeriesGroup) {
+            currentFile = targetPageIdx;
+            currentSeriesGroup = { file: pageKey, step: [] };
+            payload.series.push(currentSeriesGroup);
+        }
+
+        currentSeriesGroup.step.push(stepIndex);
     });
 
-    return flat;
+    return payload;
 }
 
 

@@ -27,27 +27,50 @@ def get_delays():
 
 # ---------------- STATE ---------------- #
 
-running = False
-typing_active = False
-code = []
-window_ref = None
+running               = False
+typing_active         = False
+window_ref            = None
+lock                  = threading.Lock()
 
-lock = threading.Lock()
+# Series data (set by start_typer)
+data                  = {}       # the full payload from JS
+series                = []       # data["series"]
 
-# Internal state
-i = 0
-word = 0
-lines = []
-next_line_idx = 0
-nextprev_line_idx = 0
-write_mode = True
-wait = False
-signal = False
-move_count = 0
-done = False
-cursor_x = 0
-waiting_for_key_release = False   # blocks next step until F8 is released after a PDF step
-current_page_idx = 0              # tracks which page is currently active in VS Code
+# Two-index pointer
+series_idx            = 0        # which item in series[] we are on
+step_in_series        = 0        # which index inside series[series_idx]["step"] we are on
+
+# Per-file store — all per-file state lives here
+# store[file_no] = {
+#     cursor_x, cursor_y, lines,
+#     write_mode, word, move_count, signal,
+#     next_line_idx, nextprev_line_idx
+# }
+store                 = {}
+
+# Global flags
+page_no               = 0        # currently active file index
+current_page_idx      = 0        # VS Code's currently open file index
+wait                  = False
+done                  = False
+waiting_for_key_release = False
+
+
+# ---------------- STORE HELPERS ---------------- #
+
+def _make_file_state():
+    """Return a fresh per-file state dict."""
+    return {
+        "cursor_x":          0,
+        "cursor_y":          -1,   # -1 = not yet positioned on first line
+        "lines":             [],   # sorted list of all lineNos visited in this file
+        "write_mode":        True,
+        "word":              0,
+        "move_count":        0,
+        "signal":            False,
+        "next_line_idx":     0,
+        "nextprev_line_idx": 0,
+    }
 
 
 # ---------------- VS CODE FILE SWITCH ---------------- #
@@ -56,11 +79,10 @@ def _switch_vscode_file(from_page: int, to_page: int):
     """
     Switch files in VS Code using Ctrl+Alt+Right (forward) or
     Ctrl+Alt+Left (backward), pressing once per file step.
-    Jump distance = abs(to_page - from_page).
     """
     global wait, current_page_idx
     wait = True
-    steps = abs(to_page - from_page)
+    steps     = abs(to_page - from_page)
     direction = 'ctrl+alt+right' if to_page > from_page else 'ctrl+alt+left'
     for _ in range(steps):
         keyboard.send(direction)
@@ -70,29 +92,33 @@ def _switch_vscode_file(from_page: int, to_page: int):
     wait = False
 
 
-
-# ---------------- NAVIGATION ---------------- #
+# ---------------- NAVIGATION PRIMITIVES ---------------- #
 
 def move_up():
     global wait
     wait = True
+    store[page_no]['cursor_y'] -= 1
     pyautogui.press("up")
     time.sleep(SYNC_DELAY)
+    print("move_up")
     wait = False
 
 def move_down():
     global wait
     wait = True
+    store[page_no]['cursor_y'] += 1
     pyautogui.press("down")
     time.sleep(SYNC_DELAY)
+    print("move_down")
     wait = False
 
 def go_line_start():
-    global wait, cursor_x
+    global wait
     wait = True
-    cursor_x = 0
+    store[page_no]['cursor_x'] = 0
     pyautogui.press("home")
     time.sleep(SYNC_DELAY)
+    print("start")
     wait = False
 
 def go_line_end():
@@ -100,83 +126,101 @@ def go_line_end():
     wait = True
     pyautogui.press("end")
     time.sleep(SYNC_DELAY)
+    print("end")
     wait = False
 
 def move_right():
-    global wait, cursor_x
+    global wait
     wait = True
-    cursor_x += 1
+    store[page_no]['cursor_x'] += 1
     pyautogui.press("right")
     time.sleep(SYNC_DELAY)
+    print("right")
     wait = False
 
 def move_left():
-    global wait, cursor_x
+    global wait
     wait = True
-    cursor_x -= 1
+    store[page_no]['cursor_x'] -= 1
     pyautogui.press("left")
     time.sleep(SYNC_DELAY)
+    print("left")
     wait = False
 
 def backspace():
-    global wait, cursor_x
+    global wait
     wait = True
-    cursor_x -= 1
+    store[page_no]['cursor_x'] -= 1
     pyautogui.press("backspace")
     time.sleep(SYNC_DELAY)
+    print("space")
     wait = False
 
 def sync():
     global wait
     wait = True
     time.sleep(SYNC_DELAY)
+    print("sync")
     wait = False
 
 
-# ---------------- CORE LOGIC ---------------- #
+# ---------------- STEP ADVANCE HELPER ---------------- #
+
+def _advance_step():
+    """Move to the next step in the series. Sets done=True when series is finished."""
+    global series_idx, step_in_series, done
+    item = series[series_idx]
+
+    if "file" in item:
+        step_in_series += 1
+        if step_in_series >= len(item["step"]):
+            step_in_series = 0
+            series_idx += 1
+    else:
+        # PDF page steps have no sub-steps
+        series_idx += 1
+        step_in_series = 0
+
+    if series_idx >= len(series):
+        done = True
+        print("[DONE] All series steps completed.")
+        # Do NOT call stop_typer() here — if the last step was a PDF page the
+        # image is still open.  process_tick() will call stop_typer() once the
+        # user has acknowledged the image (waiting_for_key_release goes False).
+
+# ---------------- CORE TICK LOGIC ---------------- #
 
 def process_tick():
-    global i, word, lines, next_line_idx, write_mode, nextprev_line_idx
-    global wait, signal, move_count, done, cursor_x, running, waiting_for_key_release
+    global wait, done, running, typing_active, waiting_for_key_release
+    global series_idx, step_in_series, page_no, current_page_idx
 
     with lock:
-        if done or not running:
+        if not running:
             return
-
+        if done:
+            # All steps finished — but wait until the user has released the
+            # key so any final PDF image is acknowledged before we stop.
+            if not waiting_for_key_release:
+                stop_typer()
+            return
         if wait:
             return
-
-        # After a PDF/image step the user must fully release the F-key before
-        # the next step is allowed.  This prevents key-repeat from instantly
-        # skipping past image steps while the key is still held.
         if waiting_for_key_release:
             return
-
-        if i >= len(code):
+        if series_idx >= len(series):
             done = True
-            running = False
-            print("Typing finished")
+            stop_typer()
             return
 
-        # Find the real previous typed line number.
-        # Do NOT look past a file-switch (-3) — each file has its own line context.
-        prev_line_no = -1
-        if i > 0:
-            for k in range(i - 1, -1, -1):
-                if code[k]["lineNo"] == -3:
-                    break                   # stop at file boundary
-                if code[k]["lineNo"] not in (-2, -1):
-                    prev_line_no = code[k]["lineNo"]
-                    break
+        item = series[series_idx]
+        
+        # ============================================================
+        # CASE 1: PDF PAGE STEP
+        # ============================================================
+        if "pdfPage" in item:
+            pdf_page = item["pdfPage"]
 
-        line = code[i]
-        line_no = line["lineNo"]
-
-        print(f"[TICK] i={i} line_no={line_no} prev={prev_line_no} write_mode={write_mode} word={word} lines={lines}")
-
-        # ---------------- PDF PAGE STEP (lineNo == -2) ---------------- #
-        if line_no == -2:
-            page_no = line.get("pageNo")
+            # Bring AutoTyper window to front
             try:
                 import ctypes
                 user32   = ctypes.windll.user32
@@ -196,187 +240,206 @@ def process_tick():
                         user32.AttachThreadInput(fg_tid, my_tid, False)
             except Exception as e:
                 print(f"[PDF step focus] {e}")
-            if window_ref is not None and page_no is not None:
+
+            if window_ref is not None:
                 try:
-                    window_ref.evaluate_js(f"showPDFPage({page_no})")
+                    window_ref.evaluate_js(f"showPDFPage({pdf_page})")
                 except Exception:
                     pass
-            write_mode = False
+
             typing_active = False
             waiting_for_key_release = True
-            i += 1
-            word = 0
-            signal = False
+            _advance_step()
             return
 
-        # ---------------- FILE SWITCH STEP (lineNo == -3) ---------------- #
-        if line_no == -3:
-            from_page = line.get('fromPage', current_page_idx)
-            to_page   = line.get('toPage',   from_page + 1)
-            print(f"[FILE SWITCH] page {from_page} → {to_page}")
-            _switch_vscode_file(from_page, to_page)
-            i += 1
-            word = 0
-            signal = False
-            lines.clear()
-            # Require explicit key re-press on the new file
+        # ============================================================
+        # CASE 2: FILE STEP
+        # ============================================================
+        target_file = int(item["file"])
+        step_list   = item["step"]
+
+        # ── File switch (if needed) ──────────────────────────────────
+        if target_file != current_page_idx:
+            _switch_vscode_file(current_page_idx, target_file)
+            page_no = target_file
+            current_page_idx = target_file
             typing_active = False
             waiting_for_key_release = True
-            print(f"[FILE SWITCH DONE] i={i} lines cleared — press F-key to continue")
-            return
+            return   # wait for key press before executing next step on new file
 
-        # Shortcut keys
+        # ── Update page_no in case it drifted ──────────────────────
+        page_no = target_file
+
+        # ── Fetch current step object ───────────────────────────────
+        actual_step_idx = step_list[step_in_series]
+        st = data[item["file"]][actual_step_idx]
+        s  = store[page_no]   # shorthand — all per-file state
+
+        line_no      = st["lineNo"]
+        prev_line_no = s["cursor_y"]   # -1 means we haven't typed anything yet in this file
+
+
+        # ── Shortcut key (lineNo == -1) ─────────────────────────────
         if line_no == -1:
-            keys = [k.strip().lower() for k in line["text"].split('+')]
+            keys = [k.strip().lower() for k in st["text"].split('+')]
             pyautogui.hotkey(*keys)
             time.sleep(TYPING_DELAY)
-            write_mode = False
-            i += 1
-            word = 0
-            signal = False
+            s["write_mode"] = False
+            _advance_step()
             return
 
-        if line_no not in lines:
-            lines.append(line_no)
-            lines.sort()
+        # ── Register lineNo in this file's sorted line list ─────────
+        if line_no not in s["lines"]:
+            s["lines"].append(line_no)
+            s["lines"].sort()
 
-        next_line_idx     = 0
-        nextprev_line_idx = 0
+        # ── Compute navigation indices ───────────────────────────────
+        s["next_line_idx"] = s["lines"].index(line_no)
+        if prev_line_no in s["lines"]:
+            s["nextprev_line_idx"] = s["lines"].index(prev_line_no)
+        
+        nxt  = s["next_line_idx"]
+        prev = s["nextprev_line_idx"]
 
-        for j in range(len(lines)):
-            if lines[j] == line_no:
-                next_line_idx = j
-            if lines[j] == prev_line_no:
-                nextprev_line_idx = j
 
-        print(f"[POS] next_idx={next_line_idx} prevnext_idx={nextprev_line_idx} move_count={move_count}")
 
-        # ---------------- WRITE MODE ---------------- #
+        # ============================================================
+        # WRITE MODE  (plain new line  OR  edit-signal text phase)
+        # ============================================================
+        print(st["cp"]== -1, s["signal"])
+        if st["cp"] == -1 or s["signal"]:
 
-        if line["cp"] == -1 or signal:
-
-            if write_mode:
-                if word < len(line["text"]):
-                    print(f"[WRITE] char '{line['text'][word]}' word={word}/{len(line['text'])}")
-                    pyautogui.write(line["text"][word], interval=0)
-                    cursor_x += 1
-                    word += 1
+            if s["write_mode"]:
+                # ── Actually type characters ─────────────────────────
+                text = st["text"]
+                if s["word"] < len(text):
+                    ch = text[s["word"]]
+                    
+                    pyautogui.write(ch, interval=0)
+                    s["cursor_x"] += 1
+                    s["word"] += 1
                     time.sleep(TYPING_DELAY)
                 else:
-                    print(f"[WRITE DONE] line {line_no} complete → i={i+1}")
-                    write_mode = False
-                    i += 1
-                    word = 0
-                    signal = False
+                    # Line fully written
+                    s["write_mode"]  = False
+                    s["signal"]      = False
+                    s["word"]        = 0
+                    s["move_count"]  = 0
+                    s["cursor_y"]    = line_no
+                    _advance_step()
 
             else:
+                # ── Navigate to the correct line ─────────────────────
                 if line_no > prev_line_no:
-                    # Special case: very first line in this file context
-                    # cursor is already at start — no Enter needed
-                    if prev_line_no == -1:
-                        go_line_start()
-                        sync()
-                        write_mode = True
-                        print(f"[DIRECT WRITE] first line of file, line {line_no}")
+                   
+                    vertical_dist = nxt - prev
+                    
+                    if s["move_count"] < vertical_dist - 1:
+                        move_down()
+                        s["move_count"] += 1
                     else:
-                        vertical_dist = next_line_idx - nextprev_line_idx
-                        print(f"[DOWN] line_no={line_no} prev={prev_line_no} vdist={vertical_dist} move_count={move_count}")
-
-                        if move_count < vertical_dist - 1:
-                            move_down()
-                            move_count += 1
-                        else:
-                            move_count = 0
-                            go_line_end()
-                            pyautogui.press("enter")
-                            cursor_x = 0
-                            sync()
-                            write_mode = True
-                            print(f"[ENTER+WRITE] starting write for line {line_no}")
+                        s["move_count"] = 0
+                        go_line_end()
+                        pyautogui.press("enter")
+                        print("enter1")
+                        s["cursor_x"] = 0
+                        sync()
+                        s["write_mode"] = True
+                        
 
                 elif line_no < prev_line_no:
-                    go_line_start()
-                    vertical_dist = nextprev_line_idx - next_line_idx
-                    print(f"[UP] line_no={line_no} prev={prev_line_no} vdist={vertical_dist} move_count={move_count}")
-
-                    if move_count < vertical_dist - 1:
+                    print(line_no,prev_line_no)
+                    vertical_dist = prev - nxt
+                    
+                    if s["move_count"] == 0:
+                        go_line_start()
+                    if s["move_count"] < vertical_dist - 1:
                         move_up()
-                        move_count += 1
+                        s["move_count"] += 1
                         return
                     else:
-                        move_count = 0
-
+                        s["move_count"] = 0
                     pyautogui.press("enter")
-                    cursor_x = 0
+                    print("enter2")
+                    s["cursor_x"] = 0
                     sync()
                     move_up()
-                    write_mode = True
-                    print(f"[UP+ENTER+WRITE] starting write for line {line_no}")
+                    s["write_mode"] = True
+                    
 
-        # ---------------- EDIT MODE ---------------- #
+                else:
+                    # Same line as previous — shouldn't normally happen for a new line step
+                    # but handle gracefully
+                    go_line_end()
+                    pyautogui.press("enter")
+                    print("enter3")
+                    s["cursor_x"] = 0
+                    sync()
+                    s["write_mode"] = True
 
+        # ============================================================
+        # EDIT MODE  (cp != -1 and signal not set yet)
+        # ============================================================
         else:
-            if not write_mode:
-                word = 0
-                
-                # Simple Case: Same logical line index (pure horizontal)
-                if nextprev_line_idx == next_line_idx:
-                    target = line["del"] + line["cp"]
-                    if cursor_x < target:
+            if not s["write_mode"]:
+                s["word"]=0
+
+
+                if prev == nxt:
+                    # Pure horizontal navigation
+                    target_x = st["cp"] + st["del"]
+                    if s["cursor_x"] < target_x:
                         move_right()
-                        return
-                    elif cursor_x > target:
+                    elif s["cursor_x"] > target_x:
                         move_left()
-                        return
                     else:
-                        move_count = 0
-                        write_mode = True
+                        s["move_count"] = 0
+                        s["write_mode"] = True
                         sync()
+                    return
+
+                # Vertical + horizontal navigation
+                vertical_moves = abs(prev - nxt)
+
+                if prev > nxt:
+                    # Move UP
+                    if s["move_count"] < vertical_moves:
+                        if s["move_count"] == 0:
+                            go_line_start()
+                        move_up()
+                        s["move_count"] += 1
+                        return
+                elif prev < nxt:
+                    # Move DOWN
+                    if s["move_count"] < vertical_moves:
+                        if s["move_count"] == 0:
+                            go_line_start()
+                        move_down()
+                        s["move_count"] += 1
                         return
 
-                # Complex Case: Different logical line index (Vertical + Horizontal)
-                # We reconstruct the original logic flow here for compatibility
-                
-                vertical_moves = abs(nextprev_line_idx - next_line_idx)
-                
-                # Determine direction first to know if we need to move up/down
-                if nextprev_line_idx > next_line_idx:
-                    # Need to move UP
-                    if move_count < vertical_moves:
-                         if move_count == 0: go_line_start()
-                         move_up()
-                         move_count += 1
-                         return
-                elif nextprev_line_idx < next_line_idx:
-                    # Need to move DOWN
-                    if move_count < vertical_moves:
-                         if move_count == 0: go_line_start()
-                         move_down()
-                         move_count += 1
-                         return
-                
-                # If we fall through here, verify if we need horizontal moves
-                horizontal_target_steps = line["del"] + line["cp"]
-                total_steps = vertical_moves + horizontal_target_steps
-                
-                if move_count < total_steps:
-                    if move_count == vertical_moves:
+                # Vertical done — now move horizontally to cp + del
+                horizontal_target = st["cp"] + st["del"]
+                total_steps = vertical_moves + horizontal_target
+
+                if s["move_count"] < total_steps:
+                    if s["move_count"] == vertical_moves:
                         go_line_start()
                     move_right()
-                    move_count += 1
+                    s["move_count"] += 1
                     return
                 else:
-                    move_count = 0
-                    write_mode = True
+                    s["move_count"] = 0
+                    s["write_mode"] = True
                     sync()
-
-            else:
-                if word < line["del"]:
+            else :
+                if s["word"] < st["del"]:
                     backspace()
-                    word += 1
-                else:
-                    word = 0
-                    signal = True
+                    s["word"] +=1
+                else :
+                    s["word"]=0
+                    s["write_mode"]=True
+                    s["signal"]=True
 
 
 # ---------------- LOOP ---------------- #
@@ -403,8 +466,6 @@ def on_key_event(event):
     global typing_active, waiting_for_key_release
 
     if event.event_type == 'down':
-        # Only allow activation once the key has been fully released after
-        # an image/PDF step (prevents key-repeat from skipping steps).
         if not waiting_for_key_release:
             typing_active = True
     elif event.event_type == 'up':
@@ -414,37 +475,51 @@ def on_key_event(event):
 
 # ---------------- PUBLIC API ---------------- #
 
-def start_typer(data, window=None):
-    global code, running, typing_active, window_ref
-    global i, word, lines, move_count, done, cursor_x
-    global waiting_for_key_release, current_page_idx
+def start_typer(payload, window=None):
+    global data, series, store, running, typing_active, window_ref
+    global series_idx, step_in_series, page_no, current_page_idx
+    global wait, done, waiting_for_key_release
 
     if running:
         print("Already running")
         return
 
     print("Starting typer...")
+    print(payload)
 
-    # Reset state
-    code = data
-    running = True
-    typing_active = False
-    window_ref = window
+    # ── Accept both new structured format and legacy flat list ───────
+    if isinstance(payload, dict) and "series" in payload:
+        data   = payload
+        series = payload["series"]
 
-    i = 0
-    word = 0
-    lines = []
-    move_count = 0
-    done = False
-    cursor_x = 0
+        # Initialize per-file store for every file key
+        store = {}
+        for k in payload.keys():
+            if isinstance(k, str) and k.isdigit():
+                store[int(k)] = _make_file_state()
+    else:
+        # Legacy: flat list — wrap it in a single-file series structure
+        data   = {"0": payload, "series": [{"file": "0", "step": list(range(len(payload)))}]}
+        series = data["series"]
+        store  = {0: _make_file_state()}
+
+    # ── Reset all global pointers ─────────────────────────────────────
+    series_idx            = 0
+    step_in_series        = 0
+    page_no               = 0
+    current_page_idx      = 0
+    wait                  = False
+    done                  = False
     waiting_for_key_release = False
-    current_page_idx = 0
+    running               = True
+    typing_active         = False
+    window_ref            = window
 
-    # Start thread
+    # ── Start thread ──────────────────────────────────────────────────
     thread = threading.Thread(target=typing_loop, daemon=True)
     thread.start()
 
-    # Hook keys
+    # ── Hook keys ─────────────────────────────────────────────────────
     for k in range(1, 13):
         keyboard.hook_key(f"f{k}", on_key_event)
 
@@ -464,14 +539,28 @@ def is_running():
 
 
 def is_next_step_image():
-    """Return True if the NEXT step to be processed is also a PDF/image step.
+    """Return True if the next step to be processed is a PDF/image step.
 
     Used by main.py to decide whether to minimise AutoTyper after an image
     closes (only minimise when the next task is a code-writing step).
     """
-    global i, code, running, done
+    global series_idx, step_in_series, series, running, done
     if not running or done:
         return False
-    if i < len(code):
-        return code[i].get("lineNo") == -2
-    return False
+    # Peek at the next item
+    peek_series = series_idx
+    peek_step   = step_in_series
+
+    if peek_series >= len(series):
+        return False
+    item = series[peek_series]
+    if "pdfPage" in item:
+        return True
+    if "file" in item:
+        # Check if after advancing step we'd land on a PDF
+        next_step = peek_step + 1
+        if next_step >= len(item["step"]):
+            next_series = peek_series + 1
+            if next_series < len(series):
+                return "pdfPage" in series[next_series]
+    return False

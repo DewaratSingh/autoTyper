@@ -150,8 +150,12 @@ def _open_fullscreen_image(image_b64: str):
                     pass
                 _tk_img_top = None
 
-                # Always unlock the key-release gate
-                typer.waiting_for_key_release = False
+                # Re-lock the gate so the user MUST release and re-press F8 to
+                # continue typing.  This prevents a held-down F8 from instantly
+                # closing the image and resuming without the user noticing the
+                # PDF slide.  The keyboard hook's 'up' handler will clear this
+                # flag once the key is physically released.
+                typer.waiting_for_key_release = True
 
                 # Only expose the code editor when the next task is NOT an image
                 if not typer.is_next_step_image():

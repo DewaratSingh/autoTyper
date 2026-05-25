@@ -24,10 +24,7 @@ function _syncActivePageToGlobals() {
   code = p ? p.code : [];
 }
 
-function _flushEditorToActivePage() {
-  const p = getActivePage();
-  if (p) p.code = code;
-}
+
 const lineHeight = 20;
 const charWidth = 8;
 const gutterWidth = 20;
@@ -623,32 +620,28 @@ function handleRightClick(lineIndex, editIndex) {
       syncSelectionVisuals();
     }
   } else {
-    // It's an edit button
-    const editSel = code[lineIndex].edit[editIndex].sel;
+    // It's an edit button — delete this edit AND all subsequent edits on the same line
 
-    if (editSel === ">") {
-      // Delete this specific edit
-      code[lineIndex].edit.splice(editIndex, 1);
-      render();
-    } else {
-      // If there's a number, remove it and delete the edit
-      const selValue = editSel;
+    // Collect sel-values of this edit and all edits after it (that are selected)
+    const selValuesToRemove = new Set();
+    for (let k = editIndex; k < code[lineIndex].edit.length; k++) {
+      const s = code[lineIndex].edit[k].sel;
+      if (s !== ">") selValuesToRemove.add(s);
+    }
 
-      // Remove only this specific selection from select array
-      select = select.filter(s => s.sel !== selValue);
+    // Remove their entries from the global select array
+    select = select.filter(s => !selValuesToRemove.has(s.sel));
 
-      // Shift remaining numbers down
-      select.forEach(s => {
-        if (s.sel > selValue) {
-          s.sel--;
-        }
-      });
+    // Remove the edits from this line (from editIndex onwards)
+    code[lineIndex].edit.splice(editIndex);
 
-      // Delete this specific edit
-      code[lineIndex].edit.splice(editIndex, 1);
-
-      // Sync visuals
+    if (selValuesToRemove.size > 0) {
+      // Re-number the remaining select entries from scratch
+      select.forEach((s, i) => { s.sel = i + 1; });
       syncSelectionVisuals();
+    } else {
+      // No numbered edits were removed — just re-render
+      render();
     }
   }
 }
@@ -1202,7 +1195,7 @@ function renderPDFMarkers(pdf) {
     // Double click → preview full screen
     thumb.ondblclick = (e) => {
       e.stopPropagation();
-      showPDFPage(pageNum);
+      showPDFPagetemp(pageNum);
     };
 
     thumb.appendChild(canvas);
@@ -1282,6 +1275,7 @@ function showPDFPreview(pageNum, anchorElement) {
   });
 }
 
+
 function showPDFPage(pageNum) {
   if (!pdfDoc) return;
 
@@ -1307,6 +1301,53 @@ function showPDFPage(pageNum) {
       const b64 = dataUrl.split(',')[1];
 
       // Ask Python to open a REAL fullscreen native window
+      if (window.pywebview && window.pywebview.api) {
+        window.pywebview.api.show_image_fullscreen(b64).catch(() => {
+          // Fallback: show in the in-app modal
+          const canvas = document.getElementById('pdfModalCanvas');
+          const context = canvas.getContext('2d');
+          canvas.width = viewport.width;
+          canvas.height = viewport.height;
+          context.drawImage(offCanvas, 0, 0);
+          document.getElementById('pdfModal').classList.add('active');
+        });
+      } else {
+        // Fallback: show in the in-app modal
+        const canvas = document.getElementById('pdfModalCanvas');
+        const context = canvas.getContext('2d');
+        canvas.width = viewport.width;
+        canvas.height = viewport.height;
+        context.drawImage(offCanvas, 0, 0);
+        document.getElementById('pdfModal').classList.add('active');
+      }
+    });
+  });
+}
+
+function showPDFPagetemp(pageNum) {
+  if (!pdfDoc) return;
+
+  pdfDoc.getPage(pageNum).then(function (page) {
+    // Render at native screen resolution for best quality
+    const sw = window.screen.width || window.innerWidth;
+    const sh = window.screen.height || window.innerHeight;
+    const nativeVP = page.getViewport({ scale: 1 });
+    const scale = Math.min(sw / nativeVP.width, sh / nativeVP.height);
+    const viewport = page.getViewport({ scale: scale });
+
+    // Render into an off-screen canvas
+    const offCanvas = document.createElement('canvas');
+    offCanvas.width = viewport.width;
+    offCanvas.height = viewport.height;
+    const ctx = offCanvas.getContext('2d');
+    ctx.fillStyle = 'white';
+    ctx.fillRect(0, 0, offCanvas.width, offCanvas.height);
+
+    page.render({ canvasContext: ctx, viewport: viewport }).promise.then(function () {
+      // Export as PNG data URL, strip the prefix to get pure base64
+      const dataUrl = offCanvas.toDataURL('image/png');
+      const b64 = dataUrl.split(',')[1];
+
 
       // Fallback: show in the in-app modal
       const canvas = document.getElementById('pdfModalCanvas');
@@ -1319,7 +1360,6 @@ function showPDFPage(pageNum) {
     });
   });
 }
-
 function showPDFPageAndFocus(pageNum) {
   try { window.pywebview.api.restore_window(); } catch (e) { }
   showPDFPage(pageNum);
@@ -1334,6 +1374,10 @@ function closePDFModal() {
   document.getElementById('pdfModal').classList.remove('active');
   try { window.pywebview.api.close_fullscreen_image(); } catch (e) { }
   try { window.pywebview.api.minimize_window(); } catch (e) { }
+}
+
+function closePDFModaltemp() {
+  document.getElementById('pdfModal').classList.remove('active');
 }
 // --- KNOW MORE MODAL ---
 function knowMore() { document.getElementById('knowMoreModal').classList.add('active'); }
