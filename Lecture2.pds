@@ -1,0 +1,302 @@
+{
+  "version": 3,
+  "pdfBase64": null,
+  "pages": [
+    {
+      "id": "page-1779712978545-40wy",
+      "name": "Page 1",
+      "code": [
+        {
+          "lineNo": 0,
+          "sel": 6,
+          "text": "def add(a,b):",
+          "edit": [],
+          "isButton": false
+        },
+        {
+          "lineNo": 1,
+          "sel": 7,
+          "text": "    return a+b",
+          "edit": [],
+          "isButton": false
+        },
+        {
+          "lineNo": 2,
+          "sel": 8,
+          "text": " ",
+          "edit": [],
+          "isButton": false
+        },
+        {
+          "lineNo": 3,
+          "sel": 3,
+          "text": "a=5",
+          "edit": [],
+          "isButton": false
+        },
+        {
+          "lineNo": 4,
+          "sel": 4,
+          "text": "b=6",
+          "edit": [],
+          "isButton": false
+        },
+        {
+          "lineNo": 5,
+          "sel": 1,
+          "text": "print(5)",
+          "edit": [
+            {
+              "text": "print(5+6)",
+              "startPos": 7,
+              "editedText": "+6",
+              "editedLength": 0,
+              "sel": 2
+            },
+            {
+              "text": "print(a+b)",
+              "startPos": 6,
+              "editedText": "a+b",
+              "editedLength": 3,
+              "sel": 5
+            },
+            {
+              "text": "print(add())",
+              "startPos": 7,
+              "editedText": "dd()",
+              "editedLength": 2,
+              "sel": 9
+            },
+            {
+              "text": "print(add(a,b))",
+              "startPos": 10,
+              "editedText": "a,b",
+              "editedLength": 0,
+              "sel": 10
+            }
+          ],
+          "isButton": false
+        }
+      ]
+    },
+    {
+      "id": "page-1779713046294-fibi",
+      "name": "Page 2",
+      "code": [
+        {
+          "lineNo": 0,
+          "sel": 11,
+          "text": "from math_utils import add",
+          "edit": [],
+          "isButton": false
+        },
+        {
+          "lineNo": 1,
+          "sel": 12,
+          "text": " ",
+          "edit": [],
+          "isButton": false
+        },
+        {
+          "lineNo": 2,
+          "sel": 13,
+          "text": "add()",
+          "edit": [
+            {
+              "text": "add(5, 3)",
+              "startPos": 4,
+              "editedText": "5, 3",
+              "editedLength": 0,
+              "sel": 14
+            },
+            {
+              "text": "result = add(5, 3)",
+              "startPos": 0,
+              "editedText": "result = ",
+              "editedLength": 0,
+              "sel": 15
+            }
+          ],
+          "isButton": false
+        },
+        {
+          "lineNo": 3,
+          "sel": 16,
+          "text": "print()",
+          "edit": [
+            {
+              "text": "print(result)",
+              "startPos": 6,
+              "editedText": "result",
+              "editedLength": 0,
+              "sel": 17
+            }
+          ],
+          "isButton": false
+        }
+      ]
+    }
+  ],
+  "select": [
+    {
+      "type": "line",
+      "pageIdx": 0,
+      "lineNo": 5,
+      "sel": 1,
+      "cp": -1,
+      "del": -1,
+      "text": "print(5)"
+    },
+    {
+      "type": "line",
+      "pageIdx": 0,
+      "lineNo": 5,
+      "sel": 2,
+      "cp": 7,
+      "del": 0,
+      "text": "+6",
+      "wholeText": "print(5+6)"
+    },
+    {
+      "type": "line",
+      "pageIdx": 0,
+      "lineNo": 3,
+      "sel": 3,
+      "cp": -1,
+      "del": -1,
+      "text": "print()"
+    },
+    {
+      "type": "line",
+      "pageIdx": 0,
+      "lineNo": 4,
+      "sel": 4,
+      "cp": -1,
+      "del": -1,
+      "text": "b=6"
+    },
+    {
+      "type": "line",
+      "pageIdx": 0,
+      "lineNo": 5,
+      "sel": 5,
+      "cp": 6,
+      "del": 3,
+      "text": "a+b",
+      "wholeText": "print(a+b)"
+    },
+    {
+      "type": "line",
+      "pageIdx": 0,
+      "lineNo": 0,
+      "sel": 6,
+      "cp": -1,
+      "del": -1,
+      "text": "def add(a,b):"
+    },
+    {
+      "type": "line",
+      "pageIdx": 0,
+      "lineNo": 1,
+      "sel": 7,
+      "cp": -1,
+      "del": -1,
+      "text": "    return a+b"
+    },
+    {
+      "type": "line",
+      "pageIdx": 0,
+      "lineNo": 2,
+      "sel": 8,
+      "cp": -1,
+      "del": -1,
+      "text": "add()"
+    },
+    {
+      "type": "line",
+      "pageIdx": 0,
+      "lineNo": 5,
+      "sel": 9,
+      "cp": 7,
+      "del": 2,
+      "text": "dd()",
+      "wholeText": "print(add())"
+    },
+    {
+      "type": "line",
+      "pageIdx": 0,
+      "lineNo": 5,
+      "sel": 10,
+      "cp": 10,
+      "del": 0,
+      "text": "a,b",
+      "wholeText": "print(add(a,b))"
+    },
+    {
+      "type": "line",
+      "pageIdx": 1,
+      "lineNo": 0,
+      "sel": 11,
+      "cp": -1,
+      "del": -1,
+      "text": "from math_utils import add"
+    },
+    {
+      "type": "line",
+      "pageIdx": 1,
+      "lineNo": 1,
+      "sel": 12,
+      "cp": -1,
+      "del": -1,
+      "text": " "
+    },
+    {
+      "type": "line",
+      "pageIdx": 1,
+      "lineNo": 2,
+      "sel": 13,
+      "cp": -1,
+      "del": -1,
+      "text": "add()"
+    },
+    {
+      "type": "line",
+      "pageIdx": 1,
+      "lineNo": 2,
+      "sel": 14,
+      "cp": 4,
+      "del": 0,
+      "text": "5, 3",
+      "wholeText": "add(5, 3)"
+    },
+    {
+      "type": "line",
+      "pageIdx": 1,
+      "lineNo": 2,
+      "sel": 15,
+      "cp": 0,
+      "del": 0,
+      "text": "result = ",
+      "wholeText": "result = add(5, 3)"
+    },
+    {
+      "type": "line",
+      "pageIdx": 1,
+      "lineNo": 3,
+      "sel": 16,
+      "cp": -1,
+      "del": -1,
+      "text": "print()"
+    },
+    {
+      "type": "line",
+      "pageIdx": 1,
+      "lineNo": 3,
+      "sel": 17,
+      "cp": 6,
+      "del": 0,
+      "text": "result",
+      "wholeText": "print(result)"
+    }
+  ]
+}
