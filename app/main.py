@@ -233,6 +233,44 @@ class Api:
             return filepath
         return None
 
+    def save_file_direct(self, filepath, data):
+        try:
+            with open(filepath, 'w', encoding='utf-8') as f:
+                json.dump(data, f, indent=2)
+            return filepath
+        except Exception as e:
+            print(f"[save_file_direct] Error: {e}")
+            return None
+
+    def get_persistent_settings(self):
+        try:
+            home_dir = os.path.expanduser('~')
+            filepath = os.path.join(home_dir, 'setting.json')
+            if os.path.exists(filepath):
+                with open(filepath, 'r', encoding='utf-8') as f:
+                    return json.load(f)
+        except Exception as e:
+            print(f"[get_persistent_settings] Error: {e}")
+        return None
+
+    def save_app_settings(self, settings):
+        try:
+            # Update delays in typer
+            typer.set_delays(
+                typing_delay=settings.get('typing_delay'),
+                loop_delay=settings.get('loop_delay'),
+                sync_delay=settings.get('sync_delay')
+            )
+            # Write to setting.json in User's Home folder
+            home_dir = os.path.expanduser('~')
+            filepath = os.path.join(home_dir, 'setting.json')
+            with open(filepath, 'w', encoding='utf-8') as f:
+                json.dump(settings, f, indent=2)
+            return True
+        except Exception as e:
+            print(f"[save_app_settings] Error: {e}")
+            return False
+
     def load_file(self):
         result = self._window.create_file_dialog(
             webview.OPEN_DIALOG,
@@ -343,9 +381,27 @@ def _force_foreground(window_title: str):
         print(f"[force_foreground] {e}")
 
 
+def _load_startup_settings():
+    try:
+        home_dir = os.path.expanduser('~')
+        filepath = os.path.join(home_dir, 'setting.json')
+        if os.path.exists(filepath):
+            with open(filepath, 'r', encoding='utf-8') as f:
+                settings = json.load(f)
+            typer.set_delays(
+                typing_delay=settings.get('typing_delay'),
+                loop_delay=settings.get('loop_delay'),
+                sync_delay=settings.get('sync_delay')
+            )
+            print("[Startup] Loaded delays from setting.json")
+    except Exception as e:
+        print("[Startup] Error loading settings:", e)
+
+
 # ---------------- APP ENTRY ---------------- #
 
 if __name__ == '__main__':
+    _load_startup_settings()
     api = Api()
 
     if getattr(sys, 'frozen', False):

@@ -707,7 +707,9 @@ function renderSequencePanel() {
 
   select.forEach((item, idx) => {
     const row = document.createElement('div');
-    row.className = 'seq-item' + (item.type === 'page' ? ' type-page' : '');
+    row.className = 'seq-item' + 
+      (item.type === 'page' ? ' type-page' : 
+       item.type === 'command' ? ' type-command' : '');
 
     const num = document.createElement('div');
     num.className = 'seq-num';
@@ -718,6 +720,8 @@ function renderSequencePanel() {
     pageBadge.className = 'seq-page-badge';
     if (item.type === 'page') {
       pageBadge.textContent = '\uD83D\uDDBC\uFE0F';
+    } else if (item.type === 'command') {
+      pageBadge.textContent = '💻';
     } else {
       const pg = pages[item.pageIdx];
       pageBadge.textContent = pg ? pg.name : `P${(item.pageIdx || 0) + 1}`;
@@ -728,6 +732,9 @@ function renderSequencePanel() {
     label.className = 'seq-label';
     if (item.type === 'page') {
       label.textContent = `Page ${item.pageNo}`;
+    } else if (item.type === 'command') {
+      label.textContent = `Cmd: ${item.text}`;
+      label.title = item.text;
     } else {
       const txt = item.text || '';
       label.textContent = txt.length > 22 ? txt.slice(0, 22) + '\u2026' : txt;
@@ -746,7 +753,7 @@ function renderSequencePanel() {
     row.appendChild(num);
     row.appendChild(pageBadge);
     row.appendChild(label);
-    if (item.type === 'page') {
+    if (item.type === 'page' || item.type === 'command') {
       row.appendChild(del);
     }
     list.appendChild(row);
@@ -1223,7 +1230,7 @@ function processPDFData(arrayBuffer) {
 }
 
 function renderPDFMarkers(pdf) {
-  const bottomBar = document.getElementById('pdfBottomBar');
+  const bottomBar = document.getElementById('pdfSlidesSection');
   if (!bottomBar) {
     hideLoading();
     return;
@@ -1543,7 +1550,27 @@ function applySpeedPreset(preset) {
   });
 }
 
-function applyAccent(color, swatchEl) {
+function saveAppSettings() {
+  const typing = parseInt(document.getElementById('slTyping').value) / 100;
+  const loop = parseInt(document.getElementById('slLoop').value) / 100;
+  const sync = parseInt(document.getElementById('slSync').value) / 100;
+  const accent = localStorage.getItem('autotyper_accent') || '#007bff';
+  const bgId = localStorage.getItem('autotyper_bg_id') || 'bg-grey';
+  const bgColor = localStorage.getItem('autotyper_bg_color') || '#d4d4d4';
+
+  if (window.pywebview && window.pywebview.api && window.pywebview.api.save_app_settings) {
+    window.pywebview.api.save_app_settings({
+      typing_delay: typing,
+      loop_delay: loop,
+      sync_delay: sync,
+      accent_color: accent,
+      bg_id: bgId,
+      bg_color: bgColor
+    }).catch(err => console.error("Error saving app settings:", err));
+  }
+}
+
+function applyAccent(color, swatchEl, save = true) {
   const root = document.documentElement;
   root.style.setProperty('--accent', color);
   // Darken the accent ~20% for --accent-dark
@@ -1565,15 +1592,16 @@ function applyAccent(color, swatchEl) {
   }
   
   localStorage.setItem('autotyper_accent', color);
+  if (save) saveAppSettings();
 }
 
 function pickSwatch(el) {
   const color = el.dataset.color;
-  applyAccent(color, el);
+  applyAccent(color, el, true);
   document.getElementById('customAccentPicker').value = color;
 }
 
-function applyBg(color, btnId) {
+function applyBg(color, btnId, save = true) {
   document.documentElement.style.setProperty('--bg', color);
   document.documentElement.style.setProperty('--surface',
     btnId === 'bg-dark' ? '#2a2a3e' : (btnId === 'bg-grey' ? '#d4d4d4' : '#e8e8e8'));
@@ -1589,6 +1617,7 @@ function applyBg(color, btnId) {
   
   localStorage.setItem('autotyper_bg_id', btnId);
   localStorage.setItem('autotyper_bg_color', color);
+  if (save) saveAppSettings();
 }
 
 function shadeColor(hex, percent) {
@@ -1605,12 +1634,30 @@ function applySettings() {
   const typing = parseInt(document.getElementById('slTyping').value) / 100;
   const loop = parseInt(document.getElementById('slLoop').value) / 100;
   const sync = parseInt(document.getElementById('slSync').value) / 100;
-  try {
-    window.pywebview.api.update_settings(typing, loop, sync).then(() => {
-      toast('Settings saved! Speed updated.', 'success');
+  const accent = localStorage.getItem('autotyper_accent') || '#007bff';
+  const bgId = localStorage.getItem('autotyper_bg_id') || 'bg-grey';
+  const bgColor = localStorage.getItem('autotyper_bg_color') || '#d4d4d4';
+
+  if (window.pywebview && window.pywebview.api && window.pywebview.api.save_app_settings) {
+    window.pywebview.api.save_app_settings({
+      typing_delay: typing,
+      loop_delay: loop,
+      sync_delay: sync,
+      accent_color: accent,
+      bg_id: bgId,
+      bg_color: bgColor
+    }).then((success) => {
+      if (success) {
+        toast('Settings saved! Speed updated.', 'success');
+      } else {
+        toast('Error saving settings.', 'error');
+      }
       closeSettings();
-    }).catch(e => toast('Error saving settings: ' + e, 'error'));
-  } catch (e) {
+    }).catch(e => {
+      toast('Error saving settings: ' + e, 'error');
+      closeSettings();
+    });
+  } else {
     // pywebview not available (dev mode)
     toast('Settings applied (UI only).', 'info');
     closeSettings();
@@ -1625,11 +1672,11 @@ function applySettings() {
   });
 })();
 
-// Load saved settings on startup
+// Load saved settings on startup (from localStorage first, then setting.json once webview is ready)
 document.addEventListener('DOMContentLoaded', () => {
   const savedAccent = localStorage.getItem('autotyper_accent');
   if (savedAccent) {
-    applyAccent(savedAccent, null);
+    applyAccent(savedAccent, null, false);
     const customAccentPicker = document.getElementById('customAccentPicker');
     if (customAccentPicker) {
       customAccentPicker.value = savedAccent;
@@ -1638,6 +1685,222 @@ document.addEventListener('DOMContentLoaded', () => {
   const savedBgId = localStorage.getItem('autotyper_bg_id');
   const savedBgColor = localStorage.getItem('autotyper_bg_color');
   if (savedBgId && savedBgColor) {
-    applyBg(savedBgColor, savedBgId);
+    applyBg(savedBgColor, savedBgId, false);
   }
 });
+
+function initAppSettings() {
+  if (window.pywebview && window.pywebview.api && window.pywebview.api.get_persistent_settings) {
+    window.pywebview.api.get_persistent_settings().then((settings) => {
+      if (settings) {
+        if (settings.typing_delay !== undefined) {
+          document.getElementById('slTyping').value = Math.round(settings.typing_delay * 100);
+          document.getElementById('valTyping').textContent = Math.round(settings.typing_delay * 1000) + 'ms';
+        }
+        if (settings.loop_delay !== undefined) {
+          document.getElementById('slLoop').value = Math.round(settings.loop_delay * 100);
+          document.getElementById('valLoop').textContent = Math.round(settings.loop_delay * 1000) + 'ms';
+        }
+        if (settings.sync_delay !== undefined) {
+          document.getElementById('slSync').value = Math.round(settings.sync_delay * 100);
+          document.getElementById('valSync').textContent = Math.round(settings.sync_delay * 1000) + 'ms';
+        }
+        if (settings.accent_color) {
+          applyAccent(settings.accent_color, null, false);
+          const customAccentPicker = document.getElementById('customAccentPicker');
+          if (customAccentPicker) {
+            customAccentPicker.value = settings.accent_color;
+          }
+        }
+        if (settings.bg_id && settings.bg_color) {
+          applyBg(settings.bg_color, settings.bg_id, false);
+        }
+      }
+    }).catch(err => console.error("Error loading app settings:", err));
+  }
+}
+
+if (window.pywebview) {
+  initAppSettings();
+} else {
+  window.addEventListener('pywebviewready', initAppSettings);
+}
+
+// ─── TERMINAL COMMAND STATE & FUNCTIONS ────────────────────────────────────── //
+let commands = [];
+let editingCmdId = null;
+
+function renderCommands() {
+  const container = document.getElementById('commandList');
+  if (!container) return;
+  container.innerHTML = '';
+
+  if (commands.length === 0) {
+    const placeholder = document.createElement('div');
+    placeholder.style.padding = '12px';
+    placeholder.style.fontSize = '12px';
+    placeholder.style.color = '#888';
+    placeholder.style.textAlign = 'center';
+    placeholder.style.width = '100%';
+    placeholder.innerHTML = `For adding command click <button onclick="openCommandModal()" data-tooltip="Add a terminal command">Command</button>`;
+    container.appendChild(placeholder);
+    return;
+  }
+
+  commands.forEach(cmd => {
+    const card = document.createElement('div');
+    card.className = 'command-thumbnail';
+    card.id = `cmd_${cmd.id}`;
+
+    const text = document.createElement('div');
+    text.className = 'command-text';
+    text.textContent = cmd.text;
+    text.title = cmd.text;
+
+    const actions = document.createElement('div');
+    actions.className = 'command-actions';
+
+    // Blue + button to select
+    const btnSelect = document.createElement('button');
+    btnSelect.className = 'command-btn-select';
+    btnSelect.textContent = '+';
+    btnSelect.title = 'Add to typing sequence';
+    btnSelect.onclick = (e) => {
+      e.stopPropagation();
+      selectCommand(cmd.id);
+    };
+
+    // Edit button to edit
+    const btnEdit = document.createElement('button');
+    btnEdit.className = 'command-btn-edit';
+    btnEdit.textContent = 'Edit';
+    btnEdit.onclick = (e) => {
+      e.stopPropagation();
+      openCommandModal(cmd.id);
+    };
+
+    // Delete button (×) to delete command
+    const btnDel = document.createElement('button');
+    btnDel.className = 'command-btn-delete';
+    btnDel.textContent = '×';
+    btnDel.title = 'Delete command';
+    btnDel.onclick = (e) => {
+      e.stopPropagation();
+      deleteCommand(cmd.id);
+    };
+
+    actions.appendChild(btnSelect);
+    actions.appendChild(btnEdit);
+    actions.appendChild(btnDel);
+
+    card.appendChild(text);
+    card.appendChild(actions);
+    container.appendChild(card);
+  });
+}
+
+function selectCommand(cmdId) {
+  const cmd = commands.find(c => c.id === cmdId);
+  if (!cmd) return;
+
+  const newSel = select.length + 1;
+  select.push({
+    type: 'command',
+    cmdId: cmd.id,
+    sel: newSel,
+    lineNo: -1,
+    cp: -1,
+    del: -1,
+    text: cmd.text
+  });
+  renderSequencePanel();
+
+  // Flash the command element to confirm selection
+  const card = document.getElementById('cmd_' + cmdId);
+  if (card) {
+    card.classList.add('selected');
+    setTimeout(() => card.classList.remove('selected'), 600);
+  }
+}
+
+function deleteCommand(cmdId) {
+  // Remove command from array
+  commands = commands.filter(c => c.id !== cmdId);
+  // Remove any instances of this command from select sequence
+  select = select.filter(s => !(s.type === 'command' && s.cmdId === cmdId));
+  // Re-number select
+  select.forEach((s, idx) => { s.sel = idx + 1; });
+
+  renderCommands();
+  renderSequencePanel();
+  toast('Command deleted from list.', 'info');
+}
+
+function openCommandModal(cmdId = null) {
+  const modal = document.getElementById('commandModal');
+  const textTA = document.getElementById('commandTextarea');
+  const title = document.getElementById('commandModalTitle');
+  const submitBtn = document.getElementById('commandSubmitBtn');
+
+  if (!modal || !textTA) return;
+
+  if (cmdId) {
+    editingCmdId = cmdId;
+    const cmd = commands.find(c => c.id === cmdId);
+    textTA.value = cmd ? cmd.text : '';
+    if (title) title.textContent = '✏️ Edit Terminal Command';
+    if (submitBtn) submitBtn.textContent = 'Submit';
+  } else {
+    editingCmdId = null;
+    textTA.value = '';
+    if (title) title.textContent = '💻 Add Terminal Command';
+    if (submitBtn) submitBtn.textContent = 'Submit';
+  }
+
+  modal.style.display = 'flex';
+  setTimeout(() => textTA.focus(), 50);
+}
+
+function closeCommandModal() {
+  const modal = document.getElementById('commandModal');
+  if (modal) modal.style.display = 'none';
+  editingCmdId = null;
+}
+
+function submitCommandForm() {
+  const textTA = document.getElementById('commandTextarea');
+  if (!textTA) return;
+
+  const text = textTA.value.trim();
+  if (!text) {
+    toast('Command text cannot be empty.', 'warning');
+    return;
+  }
+
+  if (editingCmdId) {
+    // Update existing command
+    const cmd = commands.find(c => c.id === editingCmdId);
+    if (cmd) {
+      cmd.text = text;
+      // Update instances in select sequence
+      select.forEach(s => {
+        if (s.type === 'command' && s.cmdId === cmd.id) {
+          s.text = cmd.text;
+        }
+      });
+      toast('Command updated.', 'success');
+    }
+  } else {
+    // Add new command
+    const newCmd = {
+      id: 'cmd-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6),
+      text: text
+    };
+    commands.push(newCmd);
+    toast('Command added to list.', 'success');
+  }
+
+  closeCommandModal();
+  renderCommands();
+  renderSequencePanel();
+}

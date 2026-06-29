@@ -76,6 +76,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Auto-open Add Page modal on first load (no pages yet)
     renderPageTabs();
+    if (typeof renderCommands === 'function') renderCommands();
     //openAddPageModal();
 });
 
@@ -139,21 +140,26 @@ function newProject() {
         </div>
         on code lines.`;
 
-    document.getElementById("pdfBottomBar").innerHTML = ` <div style="padding: 12px; font-size: 12px; text-align: center;">No PDF selected yet.
-      Click
-      <button onclick="loadPDF()" style="height: 40px; display: inline-block; font-size: 12px; color: var(--accent);"
-        data-tooltip="Load a PDF to use as presentation slides">
-        Load PDF
-      </button>
+    const pdfSlidesSection = document.getElementById("pdfSlidesSection");
+    if (pdfSlidesSection) {
+        pdfSlidesSection.innerHTML = ` <div style="padding: 12px; font-size: 12px; text-align: center;">No PDF selected yet.
+          Click
+          <button onclick="loadPDF()" style="height: 40px; display: inline-block; font-size: 12px; color: var(--accent);"
+            data-tooltip="Load a PDF to use as presentation slides">
+            Load PDF
+          </button>
 
-      to select a PDF for your presentation slides.
-    </div>`;
+          to select a PDF for your presentation slides.
+        </div>`;
+    }
 
     inputdiv.style.display = "none";
     backdrop.classList.remove("active");
 
     pages = [];
     select = [];
+    commands = [];
+    if (typeof renderCommands === 'function') renderCommands();
     activePageIdx = 0;
     currentFile = null;
     window.currentPDFBase64 = null;
@@ -203,6 +209,8 @@ function loadProject() {
                         });
                     });
                 }
+                commands = content.commands || [];
+                if (typeof renderCommands === 'function') renderCommands();
                 activePageIdx = 0;
 
             } else if (content.version === 2) {
@@ -252,6 +260,18 @@ function loadProject() {
             toast('Project loaded', 'success');
 
             if (!window.currentPDFBase64) {
+                const pdfSlidesSection = document.getElementById("pdfSlidesSection");
+                if (pdfSlidesSection) {
+                    pdfSlidesSection.innerHTML = ` <div style="padding: 12px; font-size: 12px; text-align: center;">No PDF selected yet.
+                      Click
+                      <button onclick="loadPDF()" style="height: 40px; display: inline-block; font-size: 12px; color: var(--accent);"
+                        data-tooltip="Load a PDF to use as presentation slides">
+                        Load PDF
+                      </button>
+
+                      to select a PDF for your presentation slides.
+                    </div>`;
+                }
                 hideLoading();
             }
 
@@ -275,13 +295,42 @@ function saveProject() {
         version: 3,
         pdfBase64: window.currentPDFBase64 || null,
         pages: pages,
-        select: select
+        select: select,
+        commands: commands
+    };
+    if (currentFile) {
+        window.pywebview.api.save_file_direct(currentFile, dataToSave).then((path) => {
+            if (path) {
+                currentFile = path;
+                toast("Saved successfully", "success");
+            } else {
+                toast("Error saving file directly", "error");
+            }
+        }).catch((err) => {
+            toast("Error saving file: " + err, "error");
+        });
+    } else {
+        saveProjectAs();
+    }
+}
+
+function saveProjectAs() {
+    // Flush current editor state back into active page before saving
+    _flushEditorToActivePage();
+    const dataToSave = {
+        version: 3,
+        pdfBase64: window.currentPDFBase64 || null,
+        pages: pages,
+        select: select,
+        commands: commands
     };
     window.pywebview.api.save_file(dataToSave).then((path) => {
         if (path) {
             currentFile = path;
             toast("Saved successfully", "success");
         }
+    }).catch((err) => {
+        toast("Error saving file: " + err, "error");
     });
 }
 
@@ -316,6 +365,13 @@ function flattenForTyper() {
     select.forEach(item => {
         if (item.type === 'page') {
             payload.series.push({ pdfPage: item.pageNo });
+            currentFile = null;
+            currentSeriesGroup = null;
+            return;
+        }
+
+        if (item.type === 'command') {
+            payload.series.push({ command: item.text });
             currentFile = null;
             currentSeriesGroup = null;
             return;

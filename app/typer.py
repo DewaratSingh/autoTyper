@@ -56,6 +56,10 @@ wait                  = False
 done                  = False
 waiting_for_key_release = False
 
+# Command state machine variables
+cmd_phase             = 0        # 0 = open terminal, 1 = typing command, 2 = wait for F8 to close
+cmd_char_idx          = 0
+
 
 # ---------------- STORE HELPERS ---------------- #
 
@@ -215,6 +219,57 @@ def process_tick():
 
         item = series[series_idx]
         
+        # ============================================================
+        # CASE 0.5: COMMAND STEP
+        # ============================================================
+        if "command" in item:
+            global cmd_phase, cmd_char_idx
+            cmd_text = item["command"]
+            
+            # Phase 0: Toggle open VS Code terminal
+            if cmd_phase == 0:
+                keyboard.send("ctrl+`")
+                time.sleep(0.3)
+                cmd_phase = 1
+                cmd_char_idx = 0
+                return
+            
+            # Phase 1: Type the command character by character on each tick
+            elif cmd_phase == 1:
+                if cmd_char_idx < len(cmd_text):
+                    ch = cmd_text[cmd_char_idx]
+                    pyautogui.write(ch)
+                    cmd_char_idx += 1
+                    time.sleep(TYPING_DELAY)
+                else:
+                    # All characters typed, execute the command
+                    pyautogui.press("enter")
+                    time.sleep(0.3)
+                    cmd_phase = 2
+                    
+                    # Pause typing: force F8 key release
+                    typing_active = False
+                    waiting_for_key_release = True
+                return
+            
+            # Phase 2: Wait for next F8 press, then close terminal and advance step
+            elif cmd_phase == 2:
+                # Close VS Code terminal
+                keyboard.send("ctrl+`")
+                time.sleep(0.2)
+                
+                # Reset state for next command
+                cmd_phase = 0
+                cmd_char_idx = 0
+                
+                # Pause typing: force F8 key release before starting the next block
+                typing_active = False
+                waiting_for_key_release = True
+                
+                # Advance step
+                _advance_step()
+                return
+
         # ============================================================
         # CASE 1: PDF PAGE STEP
         # ============================================================
@@ -507,6 +562,9 @@ def start_typer(payload, window=None):
         store  = {0: _make_file_state()}
 
     # ── Reset all global pointers ─────────────────────────────────────
+    global cmd_phase, cmd_char_idx
+    cmd_phase             = 0
+    cmd_char_idx          = 0
     series_idx            = 0
     step_in_series        = 0
     page_no               = 0
