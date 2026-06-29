@@ -1,442 +1,909 @@
-<!DOCTYPE html>
+<!doctype html>
 <html>
+  <head>
+    <title>autoTyper</title>
 
-<head>
-  <title>autoTyper</title>
-  
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-  <script>
-    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
-  </script>
-  <link rel="stylesheet" href="style.css">
-</head>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <script>
+      pdfjsLib.GlobalWorkerOptions.workerSrc =
+        "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+    </script>
+    <link rel="stylesheet" href="style.css" />
+  </head>
 
-<body style="background-color: rgba(26, 25, 25, 0.3)">
-  <div id="toastContainer"></div>
+  <body style="background-color: rgba(26, 25, 25, 0.3)">
+    <div id="toastContainer"></div>
 
-  <!-- Loading Progress Modal -->
-  <div id="loadingModal">
-    <div id="loadingBox">
-      <div id="loadingSpinner"></div>
-      <div id="loadingTitle">Loading...</div>
-      <div id="loadingProgressContainer">
-        <div id="loadingProgressBar"></div>
+    <!-- Loading Progress Modal -->
+    <div id="loadingModal">
+      <div id="loadingBox">
+        <div id="loadingSpinner"></div>
+        <div id="loadingTitle">Loading...</div>
+        <div id="loadingProgressContainer">
+          <div id="loadingProgressBar"></div>
+        </div>
+        <div id="loadingPercent">0%</div>
+        <div id="loadingStatus">Preparing...</div>
       </div>
-      <div id="loadingPercent">0%</div>
-      <div id="loadingStatus">Preparing...</div>
     </div>
-  </div>
 
-  <!-- Settings Modal -->
-  <div id="settingsModal">
-    <div id="settingsBox">
-      <div id="settingsHeader">
-        <h2>Settings</h2>
-        <button class="st-close" onclick="closeSettings()">✕</button>
-      </div>
-      <div id="settingsBody">
-
-        <!-- Typing Speed -->
-        <div class="st-section">
-          <div class="st-section-title">Typing Speed</div>
-          <div class="st-speed-btns">
-            <button onclick="applySpeedPreset('slow')" id="preset-slow">Slow</button>
-            <button onclick="applySpeedPreset('normal')" id="preset-normal" class="active">Normal</button>
-            <button onclick="applySpeedPreset('fast')" id="preset-fast">Fast</button>
-            <button onclick="applySpeedPreset('turbo')" id="preset-turbo">Turbo</button>
+    <!-- Settings Modal -->
+    <div id="settingsModal">
+      <div id="settingsBox">
+        <div id="settingsHeader">
+          <h2>Settings</h2>
+          <button class="st-close" onclick="closeSettings()">✕</button>
+        </div>
+        <div id="settingsBody">
+          <!-- Typing Speed -->
+          <div class="st-section">
+            <div class="st-section-title">Typing Speed</div>
+            <div class="st-speed-btns">
+              <button onclick="applySpeedPreset('slow')" id="preset-slow">
+                Slow
+              </button>
+              <button
+                onclick="applySpeedPreset('normal')"
+                id="preset-normal"
+                class="active"
+              >
+                Normal
+              </button>
+              <button onclick="applySpeedPreset('fast')" id="preset-fast">
+                Fast
+              </button>
+              <button onclick="applySpeedPreset('turbo')" id="preset-turbo">
+                Turbo
+              </button>
+            </div>
+            <div class="st-slider-row">
+              <label>Char Delay</label>
+              <input
+                type="range"
+                id="slTyping"
+                min="1"
+                max="30"
+                step="1"
+                value="8"
+                oninput="
+                  document.getElementById('valTyping').textContent =
+                    this.value + '0ms'
+                "
+              />
+              <span class="st-slider-val" id="valTyping">80ms</span>
+            </div>
+            <div class="st-slider-row">
+              <label>Loop Delay</label>
+              <input
+                type="range"
+                id="slLoop"
+                min="1"
+                max="40"
+                step="1"
+                value="10"
+                oninput="
+                  document.getElementById('valLoop').textContent =
+                    this.value + '0ms'
+                "
+              />
+              <span class="st-slider-val" id="valLoop">100ms</span>
+            </div>
+            <div class="st-slider-row">
+              <label>Sync Delay</label>
+              <input
+                type="range"
+                id="slSync"
+                min="1"
+                max="20"
+                step="1"
+                value="5"
+                oninput="
+                  document.getElementById('valSync').textContent =
+                    this.value + '0ms'
+                "
+              />
+              <span class="st-slider-val" id="valSync">50ms</span>
+            </div>
           </div>
-          <div class="st-slider-row">
-            <label>Char Delay</label>
-            <input type="range" id="slTyping" min="1" max="30" step="1" value="8"
-              oninput="document.getElementById('valTyping').textContent=this.value+'0ms'">
-            <span class="st-slider-val" id="valTyping">80ms</span>
+
+          <!-- Theme Accent Color -->
+          <div class="st-section">
+            <div class="st-section-title">Accent Color</div>
+            <div class="st-theme-row" id="swatchRow">
+              <div
+                class="st-swatch selected"
+                style="background: #007bff"
+                data-color="#007bff"
+                onclick="pickSwatch(this)"
+                title="Blue"
+              ></div>
+              <div
+                class="st-swatch"
+                style="background: #6f42c1"
+                data-color="#6f42c1"
+                onclick="pickSwatch(this)"
+                title="Purple"
+              ></div>
+              <div
+                class="st-swatch"
+                style="background: #e83e8c"
+                data-color="#e83e8c"
+                onclick="pickSwatch(this)"
+                title="Pink"
+              ></div>
+              <div
+                class="st-swatch"
+                style="background: #28a745"
+                data-color="#28a745"
+                onclick="pickSwatch(this)"
+                title="Green"
+              ></div>
+              <div
+                class="st-swatch"
+                style="background: #fd7e14"
+                data-color="#fd7e14"
+                onclick="pickSwatch(this)"
+                title="Orange"
+              ></div>
+              <div
+                class="st-swatch"
+                style="background: #dc3545"
+                data-color="#dc3545"
+                onclick="pickSwatch(this)"
+                title="Red"
+              ></div>
+              <div
+                class="st-swatch"
+                style="background: #20c997"
+                data-color="#20c997"
+                onclick="pickSwatch(this)"
+                title="Teal"
+              ></div>
+              <div
+                class="st-swatch"
+                style="background: #6c757d"
+                data-color="#6c757d"
+                onclick="pickSwatch(this)"
+                title="Grey"
+              ></div>
+            </div>
+            <div class="st-custom-color">
+              <label>Custom:</label>
+              <input
+                type="color"
+                id="customAccentPicker"
+                value="#007bff"
+                oninput="applyAccent(this.value, null)"
+              />
+              <span style="font-size: 12px; color: #888">Pick any colour</span>
+            </div>
           </div>
-          <div class="st-slider-row">
-            <label>Loop Delay</label>
-            <input type="range" id="slLoop" min="1" max="40" step="1" value="10"
-              oninput="document.getElementById('valLoop').textContent=this.value+'0ms'">
-            <span class="st-slider-val" id="valLoop">100ms</span>
-          </div>
-          <div class="st-slider-row">
-            <label>Sync Delay</label>
-            <input type="range" id="slSync" min="1" max="20" step="1" value="5"
-              oninput="document.getElementById('valSync').textContent=this.value+'0ms'">
-            <span class="st-slider-val" id="valSync">50ms</span>
-          </div>
-        </div>
 
-        <!-- Theme Accent Color -->
-        <div class="st-section">
-          <div class="st-section-title">Accent Color</div>
-          <div class="st-theme-row" id="swatchRow">
-            <div class="st-swatch selected" style="background:#007bff" data-color="#007bff" onclick="pickSwatch(this)"
-              title="Blue"></div>
-            <div class="st-swatch" style="background:#6f42c1" data-color="#6f42c1" onclick="pickSwatch(this)"
-              title="Purple"></div>
-            <div class="st-swatch" style="background:#e83e8c" data-color="#e83e8c" onclick="pickSwatch(this)"
-              title="Pink"></div>
-            <div class="st-swatch" style="background:#28a745" data-color="#28a745" onclick="pickSwatch(this)"
-              title="Green"></div>
-            <div class="st-swatch" style="background:#fd7e14" data-color="#fd7e14" onclick="pickSwatch(this)"
-              title="Orange"></div>
-            <div class="st-swatch" style="background:#dc3545" data-color="#dc3545" onclick="pickSwatch(this)"
-              title="Red"></div>
-            <div class="st-swatch" style="background:#20c997" data-color="#20c997" onclick="pickSwatch(this)"
-              title="Teal"></div>
-            <div class="st-swatch" style="background:#6c757d" data-color="#6c757d" onclick="pickSwatch(this)"
-              title="Grey"></div>
+          <!-- Background Theme -->
+          <div class="st-section">
+            <div class="st-section-title">Background</div>
+            <div class="st-bg-row">
+              <button
+                class="st-bg-btn"
+                id="bg-white"
+                onclick="applyBg('#f5f5f5', 'bg-white')"
+                style="background: #f5f5f5"
+              >
+                White
+              </button>
+              <button
+                class="st-bg-btn selected"
+                id="bg-grey"
+                onclick="applyBg('#d4d4d4', 'bg-grey')"
+                style="background: #d4d4d4"
+              >
+                Grey
+              </button>
+              <button
+                class="st-bg-btn"
+                id="bg-dark"
+                onclick="applyBg('#1e1e2e', 'bg-dark')"
+                style="background: #1e1e2e; color: #fff"
+              >
+                Dark
+              </button>
+            </div>
           </div>
-          <div class="st-custom-color">
-            <label>Custom:</label>
-            <input type="color" id="customAccentPicker" value="#007bff" oninput="applyAccent(this.value, null)">
-            <span style="font-size:12px;color:#888;">Pick any colour</span>
+
+          <div class="st-footer">
+            <button class="st-cancel" onclick="closeSettings()">Cancel</button>
+            <button class="st-apply" onclick="applySettings()">
+              Apply & Save
+            </button>
           </div>
         </div>
-
-        <!-- Background Theme -->
-        <div class="st-section">
-          <div class="st-section-title">Background</div>
-          <div class="st-bg-row">
-            <button class="st-bg-btn" id="bg-white" onclick="applyBg('#f5f5f5','bg-white')"
-              style="background:#f5f5f5;">White</button>
-            <button class="st-bg-btn selected" id="bg-grey" onclick="applyBg('#d4d4d4','bg-grey')"
-              style="background:#d4d4d4;">Grey</button>
-            <button class="st-bg-btn" id="bg-dark" onclick="applyBg('#1e1e2e','bg-dark')"
-              style="background:#1e1e2e;color:#fff;">Dark</button>
-          </div>
-        </div>
-
-        <div class="st-footer">
-          <button class="st-cancel" onclick="closeSettings()">Cancel</button>
-          <button class="st-apply" onclick="applySettings()">Apply & Save</button>
-        </div>
       </div>
     </div>
-  </div>
 
-
-  <nav class="navbar">
-    <button onclick="newProject()" data-tooltip="Clear everything and start a new project">+ New</button>
-    <button onclick="loadProject()" data-tooltip="Load a saved .pds project file">Load</button>
-    <button onclick="loadPDF()" data-tooltip="Load a PDF to use as presentation slides">Load PDF</button>
-    <button onclick="openCommandModal()" data-tooltip="Add a terminal command">Command</button>
-    <button id="btnStartStop" class="idle" style="display: flex;align-items: center;" onclick="toggleStartStop()"
-      data-tooltip="Start/Stop typing"><img src="start.svg" alt="" srcset="">Start</button>
-    <button onclick="saveProject()" data-tooltip="Save changes to the current .pds file">Save</button>
-    <button onclick="saveProjectAs()" data-tooltip="Save the current project as a new .pds file">Save As</button>
-    <button onclick="openSettings()" data-tooltip="Settings">Setting</button>
-    <button onclick="knowMore()" data-tooltip="Learn about AutoTyper and how it works">Know More</button>
-  </nav>
-
-  <!-- Floating Code Input Modal (edit current page) -->
-  <div id="codeModal">
-    <div id="codeModalBox">
-      <div id="codeModalHeader">
-        <h2>Paste or Upload Code</h2>
-        <button class="cm-close" onclick="closeCodeModal()" title="Close">✕</button>
-      </div>
-      <div id="codeModalBody">
-        <p class="cm-subtitle">Paste your source code below, or drag &amp; drop / upload a file. Click <strong>Next
-            →</strong> to open the editor.</p>
-        <input type="file" id="fileInputHidden" style="display:none" />
-        <input type="file" id="pdfInputHidden" accept=".pdf" style="display:none" />
-        <textarea id="code" placeholder="// Paste your code here…"></textarea>
-        <div class="cm-actions">
-          <button class="cm-upload-btn" onclick="document.getElementById('fileInputHidden').click()">📂 Upload
-            File</button>
-          <button class="cm-upload-btn" onclick="loadProject()">📁 Load Project</button>
-          <button class="cm-next-btn" onclick="nextt()">Next →</button>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Add New Page Modal -->
-  <div id="addPageModal">
-    <div id="addPageModalBox">
-      <div id="addPageModalHeader">
-        <h2>📄 Add New Page</h2>
-        <button class="cm-close" onclick="closeAddPageModal()" title="Close">✕</button>
-      </div>
-      <div id="addPageModalBody">
-        <p class="cm-subtitle">Give this page a name, then paste or upload its code.</p>
-        <input type="text" id="newPageName" placeholder="e.g. Page 1, main.py …" />
-        <input type="file" id="addPageFileInput" style="display:none" />
-        <textarea id="addPageCode" placeholder="// Paste your code here…"></textarea>
-        <div class="cm-actions">
-          <button class="cm-upload-btn" onclick="document.getElementById('addPageFileInput').click()">📂 Upload
-            File</button>
-          <button class="cm-next-btn" onclick="createPage()">Create Page →</button>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Command Modal -->
-  <div id="commandModal" style="display: none; position: fixed; inset: 0; z-index: 20000; backdrop-filter: blur(5px); justify-content: center; align-items: center;">
-    <div id="commandModalBox" class="your-div" style="background: #d4d4d4; border-radius: 10px; width: 90%; max-width: 500px; position: relative; overflow: hidden;">
-      <div id="commandModalHeader" style="background: var(--accent); padding: 14px 20px; display: flex; align-items: center; justify-content: space-between;">
-        <h2 id="commandModalTitle" style="margin: 0; color: #fff; font-size: 16px;">💻 Add Terminal Command</h2>
-        <button class="cm-close" onclick="closeCommandModal()" title="Close" style="background: none; border: none; color: #fff; font-size: 20px; cursor: pointer;">✕</button>
-      </div>
-      <div id="commandModalBody" style="padding: 20px 22px 18px; background-color: #fff;">
-        <p class="cm-subtitle" style="font-size: 12px; color: black; margin: 0 0 12px;">Enter the terminal command below that you want AutoTyper to type and run.</p>
-        <textarea id="commandTextarea" placeholder="e.g. npm run dev" style="width: 100%; height: 120px; border: 4px solid var(--accent); border-radius: 6px; font-family: monospace; font-size: 14px; padding: 10px; box-sizing: border-box; resize: vertical; outline: none;"></textarea>
-        <div class="cm-actions" style="display: flex; gap: 10px; margin-top: 14px; justify-content: flex-end;">
-          <button class="cm-upload-btn" onclick="closeCommandModal()" style="background: #fff; color: var(--accent); border: 2px solid var(--accent); border-radius: 5px; padding: 8px 16px; cursor: pointer; font-size: 13px; font-weight: 600;">Cancel</button>
-          <button id="commandSubmitBtn" class="cm-next-btn" onclick="submitCommandForm()" style="background: var(--accent); color: #fff; border: none; border-radius: 5px; padding: 8px 20px; font-size: 13px; font-weight: 700; cursor: pointer;">Submit</button>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Page Context Menu (Rename / Delete) -->
-  <div id="pageContextMenu">
-    <div id="pcm-rename" onclick="renamePage()">✏️ Rename</div>
-    <div id="pcm-delete" onclick="deletePage()">🗑️ Delete</div>
-  </div>
-
-  <!-- Rename Page Modal -->
-  <div id="renamePageModal">
-    <div id="renamePageModalBox">
-      <div id="renamePageModalHeader">
-        <h2>✏️ Rename Page</h2>
-        <button class="cm-close" onclick="closeRenamePageModal()" title="Close">✕</button>
-      </div>
-      <div id="renamePageModalBody">
-        <p class="cm-subtitle">Enter a new name for this page.</p>
-        <input type="text" id="renamePageInput" placeholder="Page name…" />
-        <div class="cm-actions">
-          <button class="cm-upload-btn" onclick="closeRenamePageModal()">Cancel</button>
-          <button class="cm-next-btn" onclick="confirmRenamePage()">✔ Rename</button>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Global Editor Tooltip -->
-  <div id="globalEditorTooltip"
-    style="display: none; position: fixed; z-index: 100000; background: rgba(15, 15, 30, 0.92); color: #fff; font-size: 12px; font-family: Arial, sans-serif; font-weight: 500; white-space: pre-line; text-align: center; padding: 6px 11px; border-radius: 6px; pointer-events: none; opacity: 0; transition: opacity 0.2s ease; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4); transform: translate(-50%, -100%); margin-top: -8px;">
-  </div>
-
-  <div id="backdrop"></div>
-  <div id="inputdiv">
-    <div class="input-container">
-      <div id="insertTypeGroup"
-        style="display: none; align-items: center; background: #f0f0f0; border-left: 4px solid #28a745; border-radius: 6px; padding: 10px 12px; margin-bottom: 15px;">
-        <label style="margin-right: 15px; font-family: monospace; font-size: 14px; color: #333; cursor: pointer;">
-          <input type="radio" name="lineType" value="text" checked> Text Line
-        </label>
-        <label style="font-family: monospace; font-size: 14px; color: #333; cursor: pointer;">
-          <input type="radio" name="lineType" value="shortcut"> Shortcut (e.g. ctrl+s)
-        </label>
-      </div>
-      <div id="originalContainer"
-        style="display: flex; align-items: center; background: #f0f0f0; border-left: 4px solid #007bff; border-radius: 6px; padding: 5px 12px; margin-bottom: 15px;">
-        <div id="editLabelText"
-          style="font-family: monospace; font-size: 14px; color: #333; margin-right: 10px; white-space: nowrap;">
-          Original Line:</div>
-        <input type="text" id="originalInput"
-          style="flex: 1; background: transparent; border: none; font-family: monospace; font-size: 14px; color: #333; outline: none; padding: 5px 0;" />
-      </div>
-      <input type="text" id="input" placeholder="Enter your edit" />
-      <div class="button-group">
-        <button class="btn-confirm" onclick="confermedit()">✅ Confirm</button>
-        <button class="btn-cancel" onclick="cancleinput()">❌ Cancel</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- Know More Modal -->
-  <div id="knowMoreModal">
-    <div id="knowMoreBox">
-      <div id="knowMoreHeader">
-        <h2>AutoTyper — Project Documentation</h2>
-        <button class="km-close" onclick="closeKnowMore()">✕</button>
-      </div>
-      <div id="knowMoreBody">
-        <h1>AutoTyper</h1>
-        <p class="km-tagline">A Tool to Make Programming Lectures Interactive &amp; Effective</p>
-
-        <h3>1. Abstract</h3>
-        <p>AutoTyper is a desktop-based tool designed to improve the way programming is taught in classrooms. It
-          simulates real human typing inside any code editor, allowing teachers to present code step-by-step in a
-          natural and controlled manner.</p>
-        <p>Unlike traditional methods, AutoTyper types code <strong>character by character</strong> with real cursor
-          movement, helping students understand logic, syntax, and structure more effectively.</p>
-
-        <hr class="km-hr">
-
-        <h3>2. Problem Statement</h3>
-        <p>In most programming classes, teachers use two common methods:</p>
-        <ul>
-          <li><strong>Manual Live Typing</strong> — prone to errors, students fall behind</li>
-          <li><strong>Pre-written Code</strong> — students see final code only, miss the build process</li>
-        </ul>
-        <div class="km-insight">
-          Students don’t struggle with code —<br>
-          They struggle with understanding <strong>how the code is built step-by-step</strong>
-        </div>
-
-        <hr class="km-hr">
-
-        <h3>3. Objective</h3>
-        <ul>
-          <li>Improve programming teaching methods</li>
-          <li>Make lectures more interactive</li>
-          <li>Help students understand step-by-step code development</li>
-          <li>Reduce manual typing effort &amp; increase engagement</li>
-        </ul>
-
-        <hr class="km-hr">
-
-        <h3>4. Proposed Solution</h3>
-        <p>AutoTyper simulates real human typing inside any editor. Instead of showing full code at once, it:</p>
-        <ul>
-          <li>Types letter by letter</li>
-          <li>Moves the cursor naturally</li>
-          <li>Handles indentation and spacing automatically</li>
-          <li>Creates a real-time coding experience</li>
-        </ul>
-        <div class="km-tip">All controlled with a single key — <strong>F8</strong>.</div>
-
-        <hr class="km-hr">
-
-        <h3>5. Key Features</h3>
-        <ul>
-          <li>Paste any programming code</li>
-          <li>Automatically split code into lines</li>
-          <li>Edit, reorder, or delete lines</li>
-          <li>Save projects as reusable <strong>.pds</strong> files</li>
-          <li>Simulates real typing (character-by-character)</li>
-          <li>Automatic cursor movement and indentation</li>
-          <li>One-key control: <strong>Press F8</strong> - start typing | <strong>Release</strong> - pause</li>
-        </ul>
-
-        <hr class="km-hr">
-
-        <h3>6. How It Works</h3>
-        <ol style="margin-left:18px;padding:0;">
-          <li>Paste your code into AutoTyper</li>
-          <li>Click <strong>Next</strong> to split into lines</li>
-          <li>Edit or arrange lines as per teaching flow</li>
-          <li>Save the project</li>
-          <li>During lecture: Hold <strong>F8</strong> - code types character by character</li>
-        </ol>
-        <div class="km-tip">Simply don’t press F8 to pause - the teacher is always in full control.</div>
-
-        <hr class="km-hr">
-
-        <h3>7. Benefits</h3>
-        <p><strong>For Teachers:</strong></p>
-        <ul>
-          <li>Saves time, avoids typing mistakes</li>
-          <li>Teach at a controlled pace</li>
-          <li>Reusable lecture content</li>
-          <li>More professional &amp; engaging delivery</li>
-        </ul>
-        <p><strong>For Students:</strong></p>
-        <ul>
-          <li>Better understanding of logic &amp; syntax</li>
-          <li>Learn structure naturally</li>
-          <li>More engagement &amp; improved retention</li>
-        </ul>
-
-        <hr class="km-hr">
-
-        <h3>10. Future Scope</h3>
-        <ul>
-          <li>AI-based code explanation</li>
-          <li>Voice-based teaching integration</li>
-          <li>Integration with IDEs (VS Code, etc.)</li>
-          <li>Cloud storage and sharing</li>
-          <li>Multi-language support</li>
-        </ul>
-
-        <div class="km-footer">
-          AutoTyper solves a real classroom problem by bridging the gap between teaching and understanding.<br>
-          Programming is not about writing code fast…<br>
-          It’s about understanding <em>how</em> code is built.<br>
-          <strong>AutoTyper makes that possible.</strong>
-        </div>
-        <div>
-          <h3>Connect with Me</h3>
-
-          <a href="https://www.linkedin.com/in/dewarat-singh-861bb9278/" target="_blank" class="btn linkedin">
-            LinkedIn
-          </a>
-          <br>
-          <a href="https://github.com/DewaratSingh" target="_blank" class="btn github">
-            GitHub
-          </a>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <div id="pages">
-    <!-- Tabs rendered dynamically by renderPageTabs() -->
-    <div id="addPageBtn" onclick="openAddPageModal()">+</div>
-  </div>
-
-  <div id="editorRow" class="your-div">
-    <div id="editor" class="your-div">
-      No code selected yet. <br>
-      Click
-      <button onclick="loadProject()" style="color:var(--accent);" data-tooltip="Load a saved .pds project file">
-        Load
+    <nav class="navbar">
+      <button
+        onclick="newProject()"
+        data-tooltip="Clear everything and start a new project"
+      >
+        + New
       </button>
-      to open an existing lecture, or click
-      <div id="addPageBtn" style="display:inline-block; text-align: center; background-color: #1a1a2e;"
-        onclick="openAddPageModal()">+</div>
-      to create a new lecture.
+      <button
+        onclick="saveProject()"
+        data-tooltip="Save changes to the current .pds file"
+      >
+        Save
+      </button>
+      <button
+        onclick="saveProjectAs()"
+        data-tooltip="Save the current project as a new .pds file"
+      >
+        Save As
+      </button>
 
-    </div>
+      <button
+        onclick="loadProject()"
+        data-tooltip="Load a saved .pds project file"
+      >
+        Load Lecture
+      </button>
+      <button
+        id="btnStartStop"
+        class="idle"
+        style="display: flex; align-items: center"
+        onclick="toggleStartStop()"
+        data-tooltip="Start/Stop typing"
+      >
+        <img src="start.svg" alt="" srcset="" />Start
+      </button>
+      <button
+        onclick="loadPDF()"
+        data-tooltip="Load a PDF to use as presentation slides"
+      >
+        Load PDF
+      </button>
+      <button
+        onclick="openCommandModal()"
+        data-tooltip="Add a terminal command"
+      >
+        Command
+      </button>
 
-    <div id="sequencePanel" class="your-div">
-      <div id="seqList" class="your-div">
+      <button onclick="openSettings()" data-tooltip="Settings">Setting</button>
+      <button
+        onclick="knowMore()"
+        data-tooltip="Learn about AutoTyper and how it works"
+      >
+        Know More
+      </button>
+    </nav>
 
-        No steps yet. Click
-
-        <div
-          style="display: inline-block; position: relative; top: 5px; left: 0px; width: 19px; height: 19px; z-index: 5;">
-          <div class="mark" style="position: absolute; top: 0px; left: 0px; z-index: 100; background-color: yellow;">
-            &gt;</div>
+    <!-- Floating Code Input Modal (edit current page) -->
+    <div id="codeModal">
+      <div id="codeModalBox">
+        <div id="codeModalHeader">
+          <h2>Paste or Upload Code</h2>
+          <button class="cm-close" onclick="closeCodeModal()" title="Close">
+            ✕
+          </button>
         </div>
-        on code lines.
-
+        <div id="codeModalBody">
+          <p class="cm-subtitle">
+            Paste your source code below, or drag &amp; drop / upload a file.
+            Click <strong>Next →</strong> to open the editor.
+          </p>
+          <input type="file" id="fileInputHidden" style="display: none" />
+          <input
+            type="file"
+            id="pdfInputHidden"
+            accept=".pdf"
+            style="display: none"
+          />
+          <textarea id="code" placeholder="// Paste your code here…"></textarea>
+          <div class="cm-actions">
+            <button
+              class="cm-upload-btn"
+              onclick="document.getElementById('fileInputHidden').click()"
+            >
+              📂 Upload File
+            </button>
+            <button class="cm-upload-btn" onclick="loadProject()">
+              📁 Load Project
+            </button>
+            <button class="cm-next-btn" onclick="nextt()">Next →</button>
+          </div>
+        </div>
       </div>
     </div>
-  </div>
 
-  <div id="pdfBottomBar" class="your-div">
-    <div id="pdfSlidesSection" class="your-div">
-      <div style="padding: 12px; font-size: 12px; text-align: center;">No PDF selected yet.
+    <!-- Add New Page Modal -->
+    <div id="addPageModal">
+      <div id="addPageModalBox">
+        <div id="addPageModalHeader">
+          <h2>📄 Add New Page</h2>
+          <button class="cm-close" onclick="closeAddPageModal()" title="Close">
+            ✕
+          </button>
+        </div>
+        <div id="addPageModalBody">
+          <p class="cm-subtitle">
+            Give this page a name, then paste or upload its code.
+          </p>
+          <input
+            type="text"
+            id="newPageName"
+            placeholder="e.g. Page 1, main.py …"
+          />
+          <input type="file" id="addPageFileInput" style="display: none" />
+          <textarea
+            id="addPageCode"
+            placeholder="// Paste your code here…"
+          ></textarea>
+          <div class="cm-actions">
+            <button
+              class="cm-upload-btn"
+              onclick="document.getElementById('addPageFileInput').click()"
+            >
+              📂 Upload File
+            </button>
+            <button class="cm-next-btn" onclick="createPage()">
+              Create Page →
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Command Modal -->
+    <div
+      id="commandModal"
+      style="
+        display: none;
+        position: fixed;
+        inset: 0;
+        z-index: 20000;
+        backdrop-filter: blur(5px);
+        justify-content: center;
+        align-items: center;
+      "
+    >
+      <div
+        id="commandModalBox"
+        class="your-div"
+        style="
+          background: #d4d4d4;
+          border-radius: 10px;
+          width: 90%;
+          max-width: 500px;
+          position: relative;
+          overflow: hidden;
+        "
+      >
+        <div
+          id="commandModalHeader"
+          style="
+            background: var(--accent);
+            padding: 14px 20px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+          "
+        >
+          <h2
+            id="commandModalTitle"
+            style="margin: 0; color: #fff; font-size: 16px"
+          >
+            💻 Add Terminal Command
+          </h2>
+          <button
+            class="cm-close"
+            onclick="closeCommandModal()"
+            title="Close"
+            style="
+              background: none;
+              border: none;
+              color: #fff;
+              font-size: 20px;
+              cursor: pointer;
+            "
+          >
+            ✕
+          </button>
+        </div>
+        <div
+          id="commandModalBody"
+          style="padding: 20px 22px 18px; background-color: #fff"
+        >
+          <p
+            class="cm-subtitle"
+            style="font-size: 12px; color: black; margin: 0 0 12px"
+          >
+            Enter the terminal command below that you want AutoTyper to type and
+            run.
+          </p>
+          <textarea
+            id="commandTextarea"
+            placeholder="e.g. npm run dev"
+            style="
+              width: 100%;
+              height: 120px;
+              border: 4px solid var(--accent);
+              border-radius: 6px;
+              font-family: monospace;
+              font-size: 14px;
+              padding: 10px;
+              box-sizing: border-box;
+              resize: vertical;
+              outline: none;
+            "
+          ></textarea>
+          <div
+            class="cm-actions"
+            style="
+              display: flex;
+              gap: 10px;
+              margin-top: 14px;
+              justify-content: flex-end;
+            "
+          >
+            <button
+              class="cm-upload-btn"
+              onclick="closeCommandModal()"
+              style="
+                background: #fff;
+                color: var(--accent);
+                border: 2px solid var(--accent);
+                border-radius: 5px;
+                padding: 8px 16px;
+                cursor: pointer;
+                font-size: 13px;
+                font-weight: 600;
+              "
+            >
+              Cancel
+            </button>
+            <button
+              id="commandSubmitBtn"
+              class="cm-next-btn"
+              onclick="submitCommandForm()"
+              style="
+                background: var(--accent);
+                color: #fff;
+                border: none;
+                border-radius: 5px;
+                padding: 8px 20px;
+                font-size: 13px;
+                font-weight: 700;
+                cursor: pointer;
+              "
+            >
+              Submit
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Page Context Menu (Rename / Delete) -->
+    <div id="pageContextMenu">
+      <div id="pcm-rename" onclick="renamePage()">✏️ Rename</div>
+      <div id="pcm-delete" onclick="deletePage()">🗑️ Delete</div>
+    </div>
+
+    <!-- Rename Page Modal -->
+    <div id="renamePageModal">
+      <div id="renamePageModalBox">
+        <div id="renamePageModalHeader">
+          <h2>✏️ Rename Page</h2>
+          <button
+            class="cm-close"
+            onclick="closeRenamePageModal()"
+            title="Close"
+          >
+            ✕
+          </button>
+        </div>
+        <div id="renamePageModalBody">
+          <p class="cm-subtitle">Enter a new name for this page.</p>
+          <input type="text" id="renamePageInput" placeholder="Page name…" />
+          <div class="cm-actions">
+            <button class="cm-upload-btn" onclick="closeRenamePageModal()">
+              Cancel
+            </button>
+            <button class="cm-next-btn" onclick="confirmRenamePage()">
+              ✔ Rename
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Global Editor Tooltip -->
+    <div
+      id="globalEditorTooltip"
+      style="
+        display: none;
+        position: fixed;
+        z-index: 100000;
+        background: rgba(15, 15, 30, 0.92);
+        color: #fff;
+        font-size: 12px;
+        font-family: Arial, sans-serif;
+        font-weight: 500;
+        white-space: pre-line;
+        text-align: center;
+        padding: 6px 11px;
+        border-radius: 6px;
+        pointer-events: none;
+        opacity: 0;
+        transition: opacity 0.2s ease;
+        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
+        transform: translate(-50%, -100%);
+        margin-top: -8px;
+      "
+    ></div>
+
+    <div id="backdrop"></div>
+    <div id="inputdiv">
+      <div class="input-container">
+        <div
+          id="insertTypeGroup"
+          style="
+            display: none;
+            align-items: center;
+            background: #f0f0f0;
+            border-left: 4px solid #28a745;
+            border-radius: 6px;
+            padding: 10px 12px;
+            margin-bottom: 15px;
+          "
+        >
+          <label
+            style="
+              margin-right: 15px;
+              font-family: monospace;
+              font-size: 14px;
+              color: #333;
+              cursor: pointer;
+            "
+          >
+            <input type="radio" name="lineType" value="text" checked /> Text
+            Line
+          </label>
+          <label
+            style="
+              font-family: monospace;
+              font-size: 14px;
+              color: #333;
+              cursor: pointer;
+            "
+          >
+            <input type="radio" name="lineType" value="shortcut" /> Shortcut
+            (e.g. ctrl+s)
+          </label>
+        </div>
+        <div
+          id="originalContainer"
+          style="
+            display: flex;
+            align-items: center;
+            background: #f0f0f0;
+            border-left: 4px solid #007bff;
+            border-radius: 6px;
+            padding: 5px 12px;
+            margin-bottom: 15px;
+          "
+        >
+          <div
+            id="editLabelText"
+            style="
+              font-family: monospace;
+              font-size: 14px;
+              color: #333;
+              margin-right: 10px;
+              white-space: nowrap;
+            "
+          >
+            Original Line:
+          </div>
+          <input
+            type="text"
+            id="originalInput"
+            style="
+              flex: 1;
+              background: transparent;
+              border: none;
+              font-family: monospace;
+              font-size: 14px;
+              color: #333;
+              outline: none;
+              padding: 5px 0;
+            "
+          />
+        </div>
+        <input type="text" id="input" placeholder="Enter your edit" />
+        <div class="button-group">
+          <button class="btn-confirm" onclick="confermedit()">
+            ✅ Confirm
+          </button>
+          <button class="btn-cancel" onclick="cancleinput()">❌ Cancel</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Know More Modal -->
+    <div id="knowMoreModal">
+      <div id="knowMoreBox">
+        <div id="knowMoreHeader">
+          <h2>AutoTyper — Project Documentation</h2>
+          <button class="km-close" onclick="closeKnowMore()">✕</button>
+        </div>
+        <div id="knowMoreBody">
+          <h1>AutoTyper</h1>
+          <p class="km-tagline">
+            A Tool to Make Programming Lectures Interactive &amp; Effective
+          </p>
+
+          <h3>1. Abstract</h3>
+          <p>
+            AutoTyper is a desktop-based tool designed to improve the way
+            programming is taught in classrooms. It simulates real human typing
+            inside any code editor, allowing teachers to present code
+            step-by-step in a natural and controlled manner.
+          </p>
+          <p>
+            Unlike traditional methods, AutoTyper types code
+            <strong>character by character</strong> with real cursor movement,
+            helping students understand logic, syntax, and structure more
+            effectively.
+          </p>
+
+          <hr class="km-hr" />
+
+          <h3>2. Problem Statement</h3>
+          <p>In most programming classes, teachers use two common methods:</p>
+          <ul>
+            <li>
+              <strong>Manual Live Typing</strong> — prone to errors, students
+              fall behind
+            </li>
+            <li>
+              <strong>Pre-written Code</strong> — students see final code only,
+              miss the build process
+            </li>
+          </ul>
+          <div class="km-insight">
+            Students don’t struggle with code —<br />
+            They struggle with understanding
+            <strong>how the code is built step-by-step</strong>
+          </div>
+
+          <hr class="km-hr" />
+
+          <h3>3. Objective</h3>
+          <ul>
+            <li>Improve programming teaching methods</li>
+            <li>Make lectures more interactive</li>
+            <li>Help students understand step-by-step code development</li>
+            <li>Reduce manual typing effort &amp; increase engagement</li>
+          </ul>
+
+          <hr class="km-hr" />
+
+          <h3>4. Proposed Solution</h3>
+          <p>
+            AutoTyper simulates real human typing inside any editor. Instead of
+            showing full code at once, it:
+          </p>
+          <ul>
+            <li>Types letter by letter</li>
+            <li>Moves the cursor naturally</li>
+            <li>Handles indentation and spacing automatically</li>
+            <li>Creates a real-time coding experience</li>
+          </ul>
+          <div class="km-tip">
+            All controlled with a single key — <strong>F8</strong>.
+          </div>
+
+          <hr class="km-hr" />
+
+          <h3>5. Key Features</h3>
+          <ul>
+            <li>Paste any programming code</li>
+            <li>Automatically split code into lines</li>
+            <li>Edit, reorder, or delete lines</li>
+            <li>Save projects as reusable <strong>.pds</strong> files</li>
+            <li>Simulates real typing (character-by-character)</li>
+            <li>Automatic cursor movement and indentation</li>
+            <li>
+              One-key control: <strong>Press F8</strong> - start typing |
+              <strong>Release</strong> - pause
+            </li>
+          </ul>
+
+          <hr class="km-hr" />
+
+          <h3>6. How It Works</h3>
+          <ol style="margin-left: 18px; padding: 0">
+            <li>Paste your code into AutoTyper</li>
+            <li>Click <strong>Next</strong> to split into lines</li>
+            <li>Edit or arrange lines as per teaching flow</li>
+            <li>Save the project</li>
+            <li>
+              During lecture: Hold <strong>F8</strong> - code types character by
+              character
+            </li>
+          </ol>
+          <div class="km-tip">
+            Simply don’t press F8 to pause - the teacher is always in full
+            control.
+          </div>
+
+          <hr class="km-hr" />
+
+          <h3>7. Benefits</h3>
+          <p><strong>For Teachers:</strong></p>
+          <ul>
+            <li>Saves time, avoids typing mistakes</li>
+            <li>Teach at a controlled pace</li>
+            <li>Reusable lecture content</li>
+            <li>More professional &amp; engaging delivery</li>
+          </ul>
+          <p><strong>For Students:</strong></p>
+          <ul>
+            <li>Better understanding of logic &amp; syntax</li>
+            <li>Learn structure naturally</li>
+            <li>More engagement &amp; improved retention</li>
+          </ul>
+
+          <hr class="km-hr" />
+
+          <h3>10. Future Scope</h3>
+          <ul>
+            <li>AI-based code explanation</li>
+            <li>Voice-based teaching integration</li>
+            <li>Integration with IDEs (VS Code, etc.)</li>
+            <li>Cloud storage and sharing</li>
+            <li>Multi-language support</li>
+          </ul>
+
+          <div class="km-footer">
+            AutoTyper solves a real classroom problem by bridging the gap
+            between teaching and understanding.<br />
+            Programming is not about writing code fast…<br />
+            It’s about understanding <em>how</em> code is built.<br />
+            <strong>AutoTyper makes that possible.</strong>
+          </div>
+          <div>
+            <h3>Connect with Me</h3>
+
+            <a
+              href="https://www.linkedin.com/in/dewarat-singh-861bb9278/"
+              target="_blank"
+              class="btn linkedin"
+            >
+              LinkedIn
+            </a>
+            <br />
+            <a
+              href="https://github.com/DewaratSingh"
+              target="_blank"
+              class="btn github"
+            >
+              GitHub
+            </a>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="pages">
+      <!-- Tabs rendered dynamically by renderPageTabs() -->
+      <div id="addPageBtn" onclick="openAddPageModal()">+</div>
+    </div>
+
+    <div id="editorRow" class="your-div">
+      <div id="editor" class="your-div">
+        No code selected yet. <br />
         Click
-        <button onclick="loadPDF()" style="height: 40px; display: inline-block; font-size: 12px; color: var(--accent);"
-          data-tooltip="Load a PDF to use as presentation slides">
-          Load PDF
+        <button
+          onclick="loadProject()"
+          style="color: var(--accent)"
+          data-tooltip="Load a saved .pds project file"
+        >
+          Load
         </button>
+        to open an existing lecture, or click
+        <div
+          id="addPageBtn"
+          style="
+            display: inline-block;
+            text-align: center;
+            background-color: #1a1a2e;
+          "
+          onclick="openAddPageModal()"
+        >
+          +
+        </div>
+        to create a new lecture.
+      </div>
 
-        to select a PDF for your presentation slides.
+      <div id="sequencePanel" class="your-div">
+        <div id="seqList" class="your-div">
+          No steps yet. Click
+
+          <div
+            style="
+              display: inline-block;
+              position: relative;
+              top: 5px;
+              left: 0px;
+              width: 19px;
+              height: 19px;
+              z-index: 5;
+            "
+          >
+            <div
+              class="mark"
+              style="
+                position: absolute;
+                top: 0px;
+                left: 0px;
+                z-index: 100;
+                background-color: yellow;
+              "
+            >
+              &gt;
+            </div>
+          </div>
+          on code lines.
+        </div>
       </div>
     </div>
-    <div id="commandSection" class="your-div">
-      <div id="commandList" style="display: flex; flex-direction: row; gap: 10px; align-items: center; height: 100%;">
-        <!-- Added commands will be rendered here -->
+
+    <div id="pdfBottomBar" class="your-div">
+      <div id="pdfSlidesSection" class="your-div">
+        <div style="padding: 12px; font-size: 12px; text-align: center">
+          No PDF selected yet. Click
+          <button
+            onclick="loadPDF()"
+            style="
+              height: 40px;
+              display: inline-block;
+              font-size: 12px;
+              color: var(--accent);
+            "
+            data-tooltip="Load a PDF to use as presentation slides"
+          >
+            Load PDF
+          </button>
+
+          to select a PDF for your presentation slides.
+        </div>
+      </div>
+      <div id="commandSection" class="your-div">
+        <div
+          id="commandList"
+          style="
+            display: flex;
+            flex-direction: row;
+            gap: 10px;
+            align-items: center;
+            height: 100%;
+          "
+        >
+          <!-- Added commands will be rendered here -->
+        </div>
       </div>
     </div>
-  </div>
 
-  <div id="pdfModal">
-    <div id="pdfModalContent">
-      <button id="pdfModalClose" onclick="closePDFModaltemp()">✕</button>
-      <canvas id="pdfModalCanvas"></canvas>
+    <div id="pdfModal">
+      <div id="pdfModalContent">
+        <button id="pdfModalClose" onclick="closePDFModaltemp()">✕</button>
+        <canvas id="pdfModalCanvas"></canvas>
+      </div>
     </div>
-  </div>
 
-  <script src="ui.js"></script>
-  <script src="renderer.js"></script>
-</body>
-
+    <script src="ui.js"></script>
+    <script src="renderer.js"></script>
+  </body>
 </html>
