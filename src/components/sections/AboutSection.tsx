@@ -178,7 +178,7 @@ export default function AboutSection() {
               {/* Social buttons */}
               <div className="flex gap-3">
                 <a
-                  href="#"
+                  href="https://github.com/dewaratSingh"
                   className="flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-medium transition-all duration-200"
                   style={{
                     background: '#0f172a',
@@ -196,7 +196,7 @@ export default function AboutSection() {
                   GitHub
                 </a>
                 <a
-                  href="#"
+                  href="https://www.linkedin.com/in/dewaratsingh/"
                   className="flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-medium transition-all duration-200"
                   style={{
                     background: '#0a66c2',

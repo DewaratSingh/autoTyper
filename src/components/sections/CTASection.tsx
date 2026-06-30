@@ -198,7 +198,7 @@ export default function CTASection() {
         >
           {/* Primary */}
           <a
-            href="#"
+            href="https://github.com/DewaratSingh/autoTyper/releases/download/v4.3/AutoTyper.exe"
             className="group inline-flex items-center gap-3 font-semibold rounded-2xl transition-all duration-300"
             style={{
               background: 'linear-gradient(135deg, #1d4ed8, #3b82f6)',
@@ -221,7 +221,7 @@ export default function CTASection() {
           </a>
 
           {/* Secondary */}
-          <a
+          {/* <a
             href="#demo"
             className="inline-flex items-center gap-3 font-semibold rounded-2xl transition-all duration-300"
             style={{
@@ -244,7 +244,7 @@ export default function CTASection() {
           >
             <Play size={20} />
             Watch Demo
-          </a>
+          </a> */}
         </motion.div>
 
         {/* Trust indicators */}
